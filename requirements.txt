@@ -1,0 +1,3 @@
+# Core dependencies
+llama-cpp-python>=0.2.50
+pyyaml>=6.0

@@ -1,0 +1,202 @@
+"""
+Tournament: Multi-round debate management with transcript logging.
+"""
+from dataclasses import dataclass, field
+from typing import Optional
+import json
+from datetime import datetime
+
+from .round import DebateRound, RoundResult
+from ..models import Debater, Judge
+from ..economy import TokenLedger, BettingManager, TokenDistributor
+from ..logs import create_transcript, DebateTranscript
+
+
+@dataclass
+class TournamentConfig:
+    num_rounds: int = 5
+    initial_balance: float = 100.0
+    max_debt: float = 50.0
+    tokens_per_round: float = 20.0
+    betting_fee: float = 0.05
+    min_bet: float = 5.0
+
+
+@dataclass
+class TournamentResult:
+    config: TournamentConfig
+    rounds: list[RoundResult]
+    final_balances: dict[str, float]
+    winner: Optional[str]
+    started_at: str
+    ended_at: str
+    transcript: Optional[DebateTranscript] = None
+
+
+class Tournament:
+    """
+    Runs a multi-round debate tournament.
+    """
+    
+    def __init__(
+        self,
+        debater_a: Debater,
+        debater_b: Debater,
+        judge: Judge,
+        topics: list[str],
+        config: Optional[TournamentConfig] = None,
+        enable_transcript: bool = True,
+    ):
+        self.debater_a = debater_a
+        self.debater_b = debater_b
+        self.judge = judge
+        self.topics = topics
+        self.config = config or TournamentConfig()
+        self.enable_transcript = enable_transcript
+        
+        # Initialize economy
+        self.ledger = TokenLedger(
+            self.config.initial_balance,
+            self.config.max_debt,
+        )
+        self.betting = BettingManager(
+            self.config.betting_fee,
+            self.config.min_bet,
+        )
+        self.distributor = TokenDistributor(
+            self.config.tokens_per_round,
+        )
+        
+        # Register debaters
+        self.ledger.register(debater_a.name)
+        self.ledger.register(debater_b.name)
+        
+        self._results: list[RoundResult] = []
+        self._transcript: Optional[DebateTranscript] = None
+    
+    def run(self) -> TournamentResult:
+        """Run the full tournament."""
+        started_at = datetime.now().isoformat()
+        
+        # Create transcript
+        if self.enable_transcript:
+            self._transcript = create_transcript({
+                "num_rounds": self.config.num_rounds,
+                "initial_balance": self.config.initial_balance,
+                "max_debt": self.config.max_debt,
+                "tokens_per_round": self.config.tokens_per_round,
+                "debater_a": self.debater_a.name,
+                "debater_b": self.debater_b.name,
+                "judge": self.judge.name,
+            })
+        
+        # Load models
+        self.debater_a.load_model()
+        self.debater_b.load_model()
+        self.judge.load_model()
+        
+        try:
+            for round_id in range(1, self.config.num_rounds + 1):
+                topic = self.topics[(round_id - 1) % len(self.topics)]
+                
+                print(f"\n=== Round {round_id}: {topic[:50]}... ===")
+                
+                # Create round transcript
+                round_transcript = None
+                if self._transcript:
+                    round_transcript = self._transcript.new_round(round_id, topic)
+                
+                debate_round = DebateRound(
+                    self.debater_a,
+                    self.debater_b,
+                    self.judge,
+                    self.ledger,
+                    self.betting,
+                    self.distributor,
+                )
+                
+                result = debate_round.run(topic, round_id, transcript=round_transcript)
+                self._results.append(result)
+                
+                # Print round summary
+                print(f"  Confidence: A={result.judgment.confidence_a:.2f}, B={result.judgment.confidence_b:.2f}")
+                print(f"  Tokens: A={result.tokens_awarded_a:.1f}, B={result.tokens_awarded_b:.1f}")
+                print(f"  Bets: {len(result.bets_placed)}")
+                print(f"  Balances: A={self.ledger.balance(self.debater_a.name):.1f}, "
+                      f"B={self.ledger.balance(self.debater_b.name):.1f}")
+        
+        finally:
+            # Unload models
+            self.debater_a.unload_model()
+            self.debater_b.unload_model()
+            self.judge.unload_model()
+        
+        ended_at = datetime.now().isoformat()
+        
+        # Determine winner
+        bal_a = self.ledger.balance(self.debater_a.name)
+        bal_b = self.ledger.balance(self.debater_b.name)
+        if bal_a > bal_b:
+            winner = self.debater_a.name
+        elif bal_b > bal_a:
+            winner = self.debater_b.name
+        else:
+            winner = None  # Tie
+        
+        # Finalize transcript
+        if self._transcript:
+            self._transcript.finalize(winner, {
+                self.debater_a.name: bal_a,
+                self.debater_b.name: bal_b,
+            })
+        
+        return TournamentResult(
+            config=self.config,
+            rounds=self._results,
+            final_balances={
+                self.debater_a.name: bal_a,
+                self.debater_b.name: bal_b,
+            },
+            winner=winner,
+            started_at=started_at,
+            ended_at=ended_at,
+            transcript=self._transcript,
+        )
+    
+    def save_results(self, path: str):
+        """Save tournament results to JSON."""
+        # Save ledger
+        ledger_path = path.replace(".json", "_ledger.json")
+        self.ledger.save(ledger_path)
+        
+        # Save transcript
+        if self._transcript:
+            transcript_json = path.replace(".json", "_transcript.json")
+            transcript_md = path.replace(".json", "_transcript.md")
+            self._transcript.save(transcript_json)
+            self._transcript.save_markdown(transcript_md)
+            print(f"Transcript saved to {transcript_md}")
+        
+        # Save summary
+        summary = {
+            "config": {
+                "num_rounds": self.config.num_rounds,
+                "initial_balance": self.config.initial_balance,
+                "max_debt": self.config.max_debt,
+            },
+            "rounds": [
+                {
+                    "round_id": r.round_id,
+                    "topic": r.topic,
+                    "confidence_a": r.judgment.confidence_a,
+                    "confidence_b": r.judgment.confidence_b,
+                    "tokens_a": r.tokens_awarded_a,
+                    "tokens_b": r.tokens_awarded_b,
+                    "bets": len(r.bets_placed),
+                }
+                for r in self._results
+            ],
+            "final_balances": self.ledger.summary()["balances"],
+        }
+        with open(path, "w") as f:
+            json.dump(summary, f, indent=2)
