@@ -15,7 +15,9 @@ class Turn:
     turn_type: str  # "argument", "counter", "judgment"
     round_id: int
     tokens_bet: float = 0.0
-    confidence: Optional[float] = None
+    confidence_a: Optional[float] = None
+    confidence_b: Optional[float] = None
+    sub_judgments: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -48,15 +50,27 @@ class RoundTranscript:
             tokens_bet=amount,
         ))
     
-    def add_judgment(self, judge_id: str, reasoning: str, conf_a: float, conf_b: float):
+    def add_judgment(self, judge_id: str, reasoning: str, conf_a: float, conf_b: float, sub_judgments: list = None):
         self.confidence_a = conf_a
         self.confidence_b = conf_b
+        
+        # Convert any Judgment objects to dicts for JSON serialization
+        converted_subs = []
+        if sub_judgments:
+            for sub in sub_judgments:
+                if hasattr(sub, "__dataclass_fields__"):
+                    converted_subs.append(asdict(sub))
+                else:
+                    converted_subs.append(sub)
+
         self.turns.append(Turn(
             speaker=judge_id,
             content=reasoning,
             turn_type="judgment",
             round_id=self.round_id,
-            confidence=conf_a,
+            confidence_a=conf_a,
+            confidence_b=conf_b,
+            sub_judgments=converted_subs
         ))
     
     def add_bet_resolution(self, speaker: str, won: bool, payout: float):
@@ -115,7 +129,9 @@ class DebateTranscript:
                             "type": t.turn_type,
                             "content": t.content,
                             "tokens_bet": t.tokens_bet,
-                            "confidence": t.confidence,
+                            "confidence_a": t.confidence_a,
+                            "confidence_b": t.confidence_b,
+                            "sub_judgments": t.sub_judgments,
                         }
                         for t in r.turns
                     ],
@@ -148,7 +164,23 @@ class DebateTranscript:
             for t in r.turns:
                 if t.turn_type == "judgment":
                     lines.append(f"### 🧑‍⚖️ {t.speaker} (Judgment)")
-                    lines.append(f"**Confidence A**: {r.confidence_a:.2f} | **Confidence B**: {r.confidence_b:.2f}")
+                    # Use turn-specific confidence if available, fallback to round-level
+                    ca = t.confidence_a if t.confidence_a is not None else r.confidence_a
+                    cb = t.confidence_b if t.confidence_b is not None else r.confidence_b
+                    lines.append(f"**Confidence A**: {ca:.2f} | **Confidence B**: {cb:.2f}")
+                    
+                    if t.sub_judgments:
+                        lines.append("")
+                        lines.append("#### Sub-Judge Reports")
+                        for sub in t.sub_judgments:
+                            # If sub is a Judgment object, we might need to convert it or handle it
+                            # Assuming it was converted to dict or we access its fields
+                            s_name = sub.get('judge_id', 'Sub-Judge') if isinstance(sub, dict) else sub.judge_id
+                            s_ca = sub.get('confidence_a', 0.5) if isinstance(sub, dict) else sub.confidence_a
+                            s_cb = sub.get('confidence_b', 0.5) if isinstance(sub, dict) else sub.confidence_b
+                            s_reasoning = sub.get('reasoning', '') if isinstance(sub, dict) else sub.reasoning
+                            lines.append(f"- **{s_name}**: (A: {s_ca:.2f} | B: {s_cb:.2f})")
+                            lines.append(f"  > {s_reasoning}")
                 elif t.turn_type == "deliberation":
                     lines.append(f"### 🎯 {t.speaker} (Strategic Deliberation)")
                 elif t.turn_type == "payout":

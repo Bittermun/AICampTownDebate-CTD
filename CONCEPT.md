@@ -16,7 +16,7 @@ Unlike standard debate training (OpenAI 2018), this system adds:
 | Term | Definition |
 |------|------------|
 | **Debater** | Model that generates arguments on a topic |
-| **Judge** | Smaller, amnesiac model that evaluates arguments |
+| **Judge** | Modular system (single LLM, Ensemble, or Consensus/Instructor) |
 | **Token (economic)** | Currency earned from good arguments, spent on responses |
 | **Token (LLM)** | Actual compute cost of generating words (~2-3 per word) |
 | **Bet** | Tokens staked on counter-arguments or research |
@@ -41,7 +41,8 @@ Round N:
    - PASS (save tokens)
 6. If betting: spend tokens on additional generation
 7. Judge re-evaluates → bets resolved based on confidence change
-8. Balances persist to Round N+1
+8. **Payouts Logged**: WON/LOST status and final tokens added to transcript
+9. Balances persist to Round N+1
 ```
 
 ## Token Economy Rules (To Be Refined)
@@ -63,7 +64,7 @@ Round N:
 |-------------------|-------------------------|
 | Topic | Judge's reasoning |
 | Opponent's arguments (after initial) | Judge's identity/prompt |
-| Confidence scores | Other debater's token balance |
+| Confidence scores & Standing (Lead/Trail) | Other debater's token balance |
 | Own balance and debt | Future topics |
 
 **Rationale:** Hiding judge reasoning prevents debaters from learning to pander to specific phrasings. They must learn what *actually* constitutes a good argument.
@@ -79,6 +80,13 @@ Debaters can choose TWO types of betting:
 | **Research** | Generate additional support for YOUR argument | When you're confident in your position but want to strengthen it |
 
 This allows models to develop different strategies beyond pure adversarial attack.
+
+## Modular Multi-Agent Judging
+
+Evaluation is no longer limited to a single model. The system supports:
+- **LLMJudge**: Standard single-model evaluation.
+- **EnsembleJudge**: Aggregates scores from multiple models (majority/mean).
+- **Consensus/Instructor Judge**: A council of sub-judges provides notes to a "Senior Instructor" model which synthesizes the final reasoning and score.
 
 ## LLM-Driven Deliberation
 

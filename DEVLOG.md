@@ -3,6 +3,29 @@
 Append-only journal. Each session adds entries at the top.
 
 ---
+18: 
+19: ## 2026-01-15 | Session 5: Payouts, Symmetry, and Ensembles
+20: 
+21: ### What Happened
+22: - **Closed the loop on payouts**: Round transcript now explicitly logs WON/LOST status and payout amounts for all bets.
+23: - **Implemented Information Symmetry**: Debaters now see their confidence scores and "Standing" (Leading/Trailing/Tied) during both deliberation and generation phases.
+24: - **Refactored Modular Judges**: Introduced `BaseJudge` interface and multiple judge types (`LLMJudge`, `EnsembleJudge`, `ConsensusJudge`).
+25: - **Implemented Instructor Model**: Consensus judge uses an instructor model to synthesize final judgments from sub-judge notes.
+26: - **Created `JudgeFactory`**: Utility for building complex judge configurations (Consensus vs Ensemble) easily.
+27: 
+28: ### Key Decisions
+29: - **DEC-017**: Information asymmetry is strictly enforced: reasoning stays hidden, but scores are fully transparent to enable strategic pivoting.
+30: - **DEC-018**: Consensus judge uses a multi-turn pattern: sub-judges think independently, then an instructor synthesizes.
+31: 
+32: ### Files Modified
+33: - `src/logs/transcript.py` - Added `add_bet_resolution`, updated Markdown export.
+34: - `src/arena/round.py` - Integrated payout logging and score visibility passing.
+35: - `src/models/debater.py` - Prompt enhancements for score awareness.
+36: - `src/models/judge.py` - Refactored into modular architecture.
+37: - `src/models/judge_factory.py` - [NEW] Factory for modular judges.
+38: - `src/models/__init__.py` - Export new modular judge classes.
+39: 
+40: ---
 
 ## PENDING FEATURES (not yet implemented)
 
