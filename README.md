@@ -1,48 +1,48 @@
-# Token-Debate Experiment
+# AICampTownDebate
 
-**Adversarial Token-Economy Debate Training for Internal Reasoning Optimization**
+**Adversarial Token-Economy Debate Training for Internal Reasoning Optimization (ITMC)**
 
 ## Quick Summary
 
-A novel AI training paradigm combining:
-- **Dual-model debate** for adversarial reasoning
-- **Token economy** with persistent balances and debt
-- **Amnesiac judges** to prevent bias accumulation
-- **Betting mechanics** to create stakes on argument quality
+AICampTownDebate is a novel AI training paradigm that combines:
+- **Dual-Model Debate**: Adversarial reasoning between two LLMs.
+- **Persistent Token Economy**: Models manage their own "compute currency" for generation and strategic bets.
+- **Amnesiac Judges**: Small, high-quality models that evaluate arguments without bias accumulation.
+- **Futarchy-Inspired Betting**: Models wager on their own confidence and the quality of their research/refutations.
 
-Goal: Optimize internal thinking/mesa-cognition (ITMC) through economic pressure.
+The ultimate goal is to optimize the **Internal Thinking / Mesa-Cognition (ITMC)** of LLMs through economic selection pressure.
 
-## Hardware Requirements
+## Key Concepts
 
-- Intel Core Ultra 9 185H (or equivalent)
-- 8GB dedicated GPU VRAM
-- 32GB+ system RAM
-- Models: 7B quantized (4-bit) or multiple 1-3B models
-
-## Project Structure
-
-```
-├── README.md           # This file
-├── CONCEPT.md          # Core idea and terminology
-├── DEVLOG.md           # Development journal (append-only)
-├── .agent/workflows/   # AI assistant workflows
-├── docs/               # Architecture, experiments
-└── src/                # Implementation code
-```
+- **Token (economic)**: Currency earned from successful arguments, spent on generation.
+- **Token (LLM)**: Actual compute cost of generation, deducted from the economic balance.
+- **Strategic Options**: REFUTE (counter opponent), RESEARCH (strengthen own), or PASS (save resources).
+- **Information Asymmetry**: Hiding judge reasoning to prevent models from learning to pander.
 
 ## Getting Started
 
-1. Read `CONCEPT.md` to understand the core idea
-2. Check `DEVLOG.md` for current state
-3. See `docs/architecture.md` for system design
+1. **Prerequisites**: [Ollama](https://ollama.com) installed and running.
+2. **Setup**:
+   ```bash
+   pip install -r requirements.txt
+   ollama pull qwen2.5:1.5b
+   ```
+3. **Run Demo**:
+   ```bash
+   python demo_ollama.py
+   ```
 
-## For AI Assistants
+## Documentation
 
-If you're an AI resuming work on this project:
-1. **First**: Read `.agent/workflows/resume.md`
-2. **Then**: Check `DEVLOG.md` for latest entry
-3. **Ask user** what they want to work on next
+- [CONCEPT.md](file:///c:/Users/msunw/Downloads/AIcamptowndebate/CONCEPT.md): The core theory and mechanics.
+- [DEVLOG.md](file:///c:/Users/msunw/Downloads/AIcamptowndebate/DEVLOG.md): Append-only history of development sessions.
+- [architecture.md](file:///c:/Users/msunw/Downloads/AIcamptowndebate/docs/architecture.md): System design and data flow.
+- [CONTRIBUTING.md](file:///c:/Users/msunw/Downloads/AIcamptowndebate/docs/CONTRIBUTING.md): How to add new agents or judges.
 
-## Status
+## Project Status
 
-🟡 **Phase: Foundation** - Setting up project structure and documentation
+🟡 **Phase: Foundation** - Setting up project structure, local LLM integration, and token economy dynamics.
+
+## License
+
+MIT (or check local license file).
