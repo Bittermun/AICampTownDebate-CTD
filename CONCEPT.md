@@ -50,11 +50,11 @@ Round N:
 **Problem to solve:** Models shouldn't run out of 100 initial tokens immediately.
 
 **Proposed economics:**
-- Initial balance: 100 tokens
-- Cost per response: ~proportional to LLM tokens used (TBD ratio)
-- Award per round: ~20 base + bonus for winning
-- Betting fee: 5% of stake (burned)
-- Bet multiplier on win: 1.8x stake returned
+- Initial balance: 200 tokens
+- Cost per response: ~proportional to LLM tokens used (20:1 ratio)
+- Award per round: Pot split based on final confidence
+- **Scaling Fee (Dynamic Rounds)**: 5% per iteration (Burned), capped at 50%.
+- Bet multiplier on win: Stake returned via Pot Split weight.
 
 **Key constraint:** Award rate should exceed average generation cost, so models accumulate tokens over time if they argue efficiently. Verbosity is punished.
 
@@ -154,4 +154,82 @@ We want models to develop:
 - Efficient internal representations
 - Research vs. refutation strategy selection
 
-The token economy creates selection pressure for these properties.
+## Architecture: Phase-Based Round Execution
+
+Each debate round now executes as a **pipeline of discrete phases**, each with explicit inputs and outputs:
+
+```
+RoundContext (state container)
+    │
+    ├─ Phase 1: Generate Arguments
+    │     └─ Debaters generate initial arguments, costs deducted
+    │
+    ├─ Phase 2: Initial Judgment  
+    │     └─ Amnesiac judge evaluates, confidence scores recorded
+    │
+    ├─ Phase 3: Betting
+    │     └─ LLM-driven deliberation → REFUTE / RESEARCH / PASS
+    │
+    ├─ Phase 4: Final Judgment
+    │     └─ Re-evaluate with counter-arguments/research included
+    │
+    └─ Phase 5: Token Distribution
+          └─ Pot split via confidence ratio, bet outcomes logged
+```
+
+This design allows new phases (e.g., Truth-Focus questions) to be inserted without modifying existing logic.
+
+## System Contracts (Implemented)
+
+The system now enforces strict contracts at the LLM boundary:
+
+| Contract | Purpose |
+|----------|---------|
+| `JudgmentResponse` | Validates confidence_a, confidence_b ∈ [0,1], auto-normalizes to sum=1.0 |
+| `DeliberationResponse` | Validates decision ∈ {REFUTE, RESEARCH, PASS}, amount ≥ 0 |
+
+**Validation failures reject the round** rather than defaulting to 0.5/0.5, eliminating "Shadow Ties" that biased the economy.
+
+## Future Evolution
+
+**Implemented:**
+- ✅ Contract-Based Models (Pydantic) — Structured extraction for LLM responses
+- ✅ Phase-Based Round Architecture — Decomposed into discrete, testable phases
+- ✅ Protocol Interfaces — Explicit contracts for backends/judges
+- ✅ Phase Invariant Assertions — Postcondition checks in round phases
+- ✅ Dynamic Round Duration — Debates continue until mutual PASS
+
+**Roadmap (in priority order):**
+
+1. **Observational Models** [PROPOSED]
+   - *Scribe Model*: Non-participant that summarizes rounds, tracks claims, logs strategy
+   - *Metrics Judge*: Runs alongside scoring judges, generates analytics only (no confidence contribution)
+   - Enables cross-tournament metrics: token efficiency, claim density, strategic profiles
+
+2. **Ground Truth Calibration** [FUTURE]
+   - *Scribe Model*: Non-participant that summarizes rounds, tracks claims, logs strategy
+   - *Metrics Judge*: Runs alongside scoring judges, generates analytics only (no confidence contribution)
+   - Enables cross-tournament metrics: token efficiency, claim density, strategic profiles
+
+3. **Ground Truth Calibration** [FUTURE]
+   - Factual topics where correctness can be verified post-debate
+
+4. **Tiered Arenas** [FUTURE]
+   - ELO-like ranking with promotion/relegation
+   - Requires question generation system for scale
+
+5. **Tool Use** [FUTURE]
+   - `search(query)` tool for debaters during research phase
+   - Tool usage costs tokens, tracked as metric
+
+6. **Internal Reasoning (ITMC Enhancement)** [FUTURE]
+   - Scratchpad/internal monologue hidden from opponent and judge
+   - Still costs tokens (thinking isn't free)
+   - Compare models with/without scratchpad access
+
+7. **Reputation System** [FUTURE]
+   - Long-term tracking of debater performance across tournaments
+
+8. **Bankruptcy Mechanics** [FUTURE]
+   - What happens when a debater hits the debt limit?
+

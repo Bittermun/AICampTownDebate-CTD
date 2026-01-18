@@ -40,6 +40,7 @@ class BettingManager:
         amount: float,
         round_id: int,
         ledger,  # TokenLedger
+        custom_fee_rate: Optional[float] = None,
     ) -> Optional[Bet]:
         """
         Place a bet. Deducts amount + fee from bettor.
@@ -48,7 +49,8 @@ class BettingManager:
         if amount < self.min_bet:
             return None
         
-        fee = amount * self.fee_rate
+        fee_rate = custom_fee_rate if custom_fee_rate is not None else self.fee_rate
+        fee = amount * fee_rate
         total_cost = amount + fee
         
         # Check if can afford

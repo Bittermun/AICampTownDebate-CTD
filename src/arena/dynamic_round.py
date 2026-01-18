@@ -1,0 +1,439 @@
+"""
+DynamicDebateRound: Debate round that continues until both debaters PASS.
+
+Unlike the fixed DebateRound, this class runs an iterative loop where:
+1. Initial arguments + judgment happen once
+2. Betting iterations continue until mutual PASS or safety limit
+3. Pot is locked until endgame (final distribution)
+"""
+from dataclasses import dataclass, field
+from typing import Optional, TYPE_CHECKING, List
+from ..models import Debater, BaseJudge, Argument, Judgment, BetType, BetDecision
+from ..economy import TokenLedger, BettingManager, TokenDistributor, Bet
+
+if TYPE_CHECKING:
+    from ..logs import RoundTranscript
+
+
+@dataclass
+class DynamicRoundContext:
+    """State container for dynamic round execution."""
+    round_id: int
+    topic: str
+    token_cost_ratio: int = 20
+    max_iterations: int = 10
+    
+    # Current iteration
+    iteration: int = 0
+    
+    # Initial arguments (generated once)
+    arg_a: Optional[Argument] = None
+    arg_b: Optional[Argument] = None
+    
+    # Combined arguments (built up over iterations)
+    combined_a: str = ""
+    combined_b: str = ""
+    
+    # Judgments
+    initial_judgment: Optional[Judgment] = None
+    current_judgment: Optional[Judgment] = None  # Updated each iteration
+    
+    # Iteration state
+    decision_a: Optional[BetDecision] = None
+    decision_b: Optional[BetDecision] = None
+    
+    # Accumulated pot (locked until endgame)
+    locked_pot: float = 0.0
+    all_bets: List[Bet] = field(default_factory=list)
+    all_counters: List[Argument] = field(default_factory=list)
+    
+    # Termination tracking
+    iterations_completed: int = 0
+    termination_reason: str = ""  # "mutual_pass", "max_iterations", "bankruptcy"
+    
+    # Final distribution
+    tokens_awarded_a: float = 0.0
+    tokens_awarded_b: float = 0.0
+
+
+@dataclass
+class DynamicRoundResult:
+    """Result of a dynamic debate round."""
+    round_id: int
+    topic: str
+    argument_a: Argument
+    argument_b: Argument
+    initial_judgment: Judgment
+    final_judgment: Judgment
+    tokens_awarded_a: float
+    tokens_awarded_b: float
+    iterations_completed: int
+    termination_reason: str
+    all_bets: List[Bet] = field(default_factory=list)
+    all_counters: List[Argument] = field(default_factory=list)
+    
+    @property
+    def judgment(self) -> Judgment:
+        """For backwards compatibility."""
+        return self.final_judgment
+
+
+class DynamicDebateRound:
+    """
+    Orchestrates a debate round with AI-driven duration.
+    
+    Flow:
+    1. Both debaters generate initial arguments
+    2. Judge evaluates → initial confidence scores
+    3. LOOP until termination:
+       a. Debaters decide: BET (continue) or PASS (wait)
+       b. If both PASS → exit loop
+       c. Generate counter/research for active bettors
+       d. Judge re-evaluates
+       e. Check bankruptcy / max iterations
+    4. Final distribution via pot split
+    """
+    
+    def __init__(
+        self,
+        debater_a: Debater,
+        debater_b: Debater,
+        judge: BaseJudge,
+        ledger: TokenLedger,
+        betting: BettingManager,
+        distributor: TokenDistributor,
+        max_iterations: int = 10,
+    ):
+        self.debater_a = debater_a
+        self.debater_b = debater_b
+        self.judge = judge
+        self.ledger = ledger
+        self.betting = betting
+        self.distributor = distributor
+        self.max_iterations = max_iterations
+    
+    def run(
+        self,
+        topic: str,
+        round_id: int,
+        transcript: Optional["RoundTranscript"] = None,
+        token_cost_ratio: int = 20,
+    ) -> DynamicRoundResult:
+        """Execute a dynamic debate round."""
+        ctx = DynamicRoundContext(
+            round_id=round_id,
+            topic=topic,
+            token_cost_ratio=token_cost_ratio,
+            max_iterations=self.max_iterations,
+        )
+        
+        # Phase 1: Generate initial arguments (once)
+        ctx = self._phase_generate_arguments(ctx, transcript)
+        
+        # Phase 2: Initial judgment (once)
+        ctx = self._phase_initial_judgment(ctx, transcript)
+        
+        # Phase 3: Iterative betting loop
+        ctx = self._betting_loop(ctx, transcript)
+        
+        # Phase 4: Final distribution
+        ctx = self._phase_distribute_tokens(ctx, transcript)
+        
+        return self._build_result(ctx)
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 1: Generate Arguments (runs once)
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    def _phase_generate_arguments(
+        self, ctx: DynamicRoundContext, transcript: Optional["RoundTranscript"]
+    ) -> DynamicRoundContext:
+        """Both debaters generate initial arguments."""
+        balance_a = self.ledger.balance(self.debater_a.name)
+        balance_b = self.ledger.balance(self.debater_b.name)
+        
+        ctx.arg_a = self.debater_a.generate_argument(ctx.topic, ctx.round_id, current_balance=balance_a)
+        ctx.arg_b = self.debater_b.generate_argument(ctx.topic, ctx.round_id, current_balance=balance_b)
+        
+        # Deduct token costs
+        cost_a = ctx.arg_a.llm_tokens_used // ctx.token_cost_ratio
+        cost_b = ctx.arg_b.llm_tokens_used // ctx.token_cost_ratio
+        
+        if cost_a > 0:
+            self.ledger.deduct(self.debater_a.name, cost_a, "generation_cost", ctx.round_id)
+        if cost_b > 0:
+            self.ledger.deduct(self.debater_b.name, cost_b, "generation_cost", ctx.round_id)
+        
+        # Initialize combined arguments
+        ctx.combined_a = ctx.arg_a.content
+        ctx.combined_b = ctx.arg_b.content
+        
+        if transcript:
+            transcript.add_argument(self.debater_a.name, ctx.arg_a.content)
+            transcript.add_argument(self.debater_b.name, ctx.arg_b.content)
+        
+        assert ctx.arg_a is not None, "Phase 1 failed: arg_a not generated"
+        assert ctx.arg_b is not None, "Phase 1 failed: arg_b not generated"
+        return ctx
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 2: Initial Judgment (runs once)
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    def _phase_initial_judgment(
+        self, ctx: DynamicRoundContext, transcript: Optional["RoundTranscript"]
+    ) -> DynamicRoundContext:
+        """Judge evaluates initial arguments."""
+        self.judge.reset()
+        ctx.initial_judgment = self.judge.evaluate(
+            ctx.topic, ctx.arg_a.content, ctx.arg_b.content, ctx.round_id
+        )
+        ctx.current_judgment = ctx.initial_judgment
+        
+        if transcript:
+            transcript.add_judgment(
+                self.judge.name + " (initial)",
+                ctx.initial_judgment.reasoning,
+                ctx.initial_judgment.confidence_a,
+                ctx.initial_judgment.confidence_b,
+                sub_judgments=ctx.initial_judgment.sub_judgments
+            )
+        
+        assert ctx.initial_judgment is not None, "Phase 2 failed: no judgment"
+        return ctx
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 3: Betting Loop (iterates until termination)
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    def _betting_loop(
+        self, ctx: DynamicRoundContext, transcript: Optional["RoundTranscript"]
+    ) -> DynamicRoundContext:
+        """Iterative betting loop until termination condition."""
+        
+        while ctx.iteration < ctx.max_iterations:
+            ctx.iteration += 1
+            
+            # Get current balances
+            balance_a = self.ledger.balance(self.debater_a.name)
+            balance_b = self.ledger.balance(self.debater_b.name)
+            
+            # Check bankruptcy
+            if balance_a <= -self.ledger.max_debt:
+                ctx.termination_reason = "bankruptcy_a"
+                break
+            if balance_b <= -self.ledger.max_debt:
+                ctx.termination_reason = "bankruptcy_b"
+                break
+            
+            # Debaters decide
+            ctx.decision_a = self.debater_a.decide_bet(
+                balance_a,
+                ctx.combined_b,
+                ctx.combined_a,
+                confidence_self=ctx.current_judgment.confidence_a,
+                confidence_opponent=ctx.current_judgment.confidence_b,
+            )
+            
+            ctx.decision_b = self.debater_b.decide_bet(
+                balance_b,
+                ctx.combined_a,
+                ctx.combined_b,
+                confidence_self=ctx.current_judgment.confidence_b,
+                confidence_opponent=ctx.current_judgment.confidence_a,
+            )
+            
+            if transcript:
+                transcript.add_deliberation(
+                    self.debater_a.name,
+                    ctx.decision_a.bet_type.value,
+                    ctx.decision_a.amount,
+                    f"[Iter {ctx.iteration}] {ctx.decision_a.reasoning}",
+                )
+                transcript.add_deliberation(
+                    self.debater_b.name,
+                    ctx.decision_b.bet_type.value,
+                    ctx.decision_b.amount,
+                    f"[Iter {ctx.iteration}] {ctx.decision_b.reasoning}",
+                )
+            
+            # Check mutual PASS
+            if ctx.decision_a.bet_type == BetType.PASS and ctx.decision_b.bet_type == BetType.PASS:
+                ctx.termination_reason = "mutual_pass"
+                ctx.iterations_completed = ctx.iteration
+                break
+            
+            # Process bets for active participants
+            if ctx.decision_a.bet_type != BetType.PASS:
+                ctx = self._process_bet(ctx, transcript, is_debater_a=True)
+            
+            if ctx.decision_b.bet_type != BetType.PASS:
+                ctx = self._process_bet(ctx, transcript, is_debater_a=False)
+            
+            # Re-evaluate with updated combined arguments
+            self.judge.reset()
+            try:
+                new_judgment = self.judge.evaluate(
+                    ctx.topic, ctx.combined_a, ctx.combined_b, ctx.round_id
+                )
+                ctx.current_judgment = new_judgment
+                
+                if transcript:
+                    transcript.add_judgment(
+                        self.judge.name + f" (iter {ctx.iteration})",
+                        ctx.current_judgment.reasoning,
+                        ctx.current_judgment.confidence_a,
+                        ctx.current_judgment.confidence_b,
+                        sub_judgments=ctx.current_judgment.sub_judgments
+                    )
+            except ValueError as e:
+                # Judge validation failed, keep previous judgment
+                print(f"  [Warning] Judge validation failed iter {ctx.iteration}: {e}")
+                if transcript:
+                    transcript.add_judgment(
+                        self.judge.name + f" (iter {ctx.iteration})",
+                        f"[VALIDATION_FAILED] Keeping previous scores. Error: {str(e)[:100]}",
+                        ctx.current_judgment.confidence_a,
+                        ctx.current_judgment.confidence_b,
+                        sub_judgments=None
+                    )
+            
+            ctx.iterations_completed = ctx.iteration
+        
+        # If we exited due to max iterations
+        if not ctx.termination_reason:
+            ctx.termination_reason = "max_iterations"
+            ctx.iterations_completed = ctx.max_iterations
+        
+        return ctx
+    
+    def _process_bet(
+        self,
+        ctx: DynamicRoundContext,
+        transcript: Optional["RoundTranscript"],
+        is_debater_a: bool,
+    ) -> DynamicRoundContext:
+        """Process a single debater's bet and generate content."""
+        debater = self.debater_a if is_debater_a else self.debater_b
+        decision = ctx.decision_a if is_debater_a else ctx.decision_b
+        opponent_combined = ctx.combined_b if is_debater_a else ctx.combined_a
+        own_combined = ctx.combined_a if is_debater_a else ctx.combined_b
+        # Calculate iteration-based fee (5% per iteration, cap at 50%)
+        iteration_fee = min(0.05 * ctx.iteration, 0.50)
+        
+        # Place bet (deducts from balance, adds to locked pot)
+        bet = self.betting.place_bet(
+            debater.name, 
+            decision.amount, 
+            ctx.round_id, 
+            self.ledger,
+            custom_fee_rate=iteration_fee
+        )
+        if bet:
+            ctx.all_bets.append(bet)
+            ctx.locked_pot += bet.amount
+        
+        current_bal = self.ledger.balance(debater.name)
+        
+        # Generate content
+        if decision.bet_type == BetType.REFUTATION:
+            counter = debater.generate_argument(
+                ctx.topic, ctx.round_id,
+                opponent_argument=opponent_combined,
+                current_balance=current_bal,
+                confidence_self=conf_self,
+                confidence_opponent=conf_opponent,
+            )
+            counter_cost = counter.llm_tokens_used // ctx.token_cost_ratio
+            if counter_cost > 0:
+                self.ledger.deduct(debater.name, counter_cost, "counter_generation_cost", ctx.round_id)
+            counter.tokens_bet = decision.amount
+            ctx.all_counters.append(counter)
+            
+            # Update combined argument
+            if is_debater_a:
+                ctx.combined_a += f"\n\n[COUNTER-ARGUMENT iter={ctx.iteration}]\n{counter.content}"
+            else:
+                ctx.combined_b += f"\n\n[COUNTER-ARGUMENT iter={ctx.iteration}]\n{counter.content}"
+            
+            if transcript:
+                transcript.add_argument(
+                    debater.name, counter.content,
+                    is_counter=True, tokens_bet=decision.amount
+                )
+        
+        elif decision.bet_type == BetType.RESEARCH:
+            research = debater.generate_research(
+                ctx.topic, ctx.round_id,
+                own_combined,
+                current_balance=current_bal,
+                confidence_self=conf_self,
+                confidence_opponent=conf_opponent,
+            )
+            research_cost = research.llm_tokens_used // ctx.token_cost_ratio
+            if research_cost > 0:
+                self.ledger.deduct(debater.name, research_cost, "research_generation_cost", ctx.round_id)
+            research.tokens_bet = decision.amount
+            ctx.all_counters.append(research)
+            
+            # Update combined argument
+            if is_debater_a:
+                ctx.combined_a += f"\n\n[RESEARCH iter={ctx.iteration}]\n{research.content}"
+            else:
+                ctx.combined_b += f"\n\n[RESEARCH iter={ctx.iteration}]\n{research.content}"
+            
+            if transcript:
+                transcript.add_argument(
+                    debater.name, research.content,
+                    is_counter=False, tokens_bet=decision.amount
+                )
+        
+        return ctx
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 4: Final Distribution
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    def _phase_distribute_tokens(
+        self, ctx: DynamicRoundContext, transcript: Optional["RoundTranscript"]
+    ) -> DynamicRoundContext:
+        """Final pot split based on current judgment."""
+        dist = self.distributor.distribute_pot(
+            self.debater_a.name,
+            self.debater_b.name,
+            ctx.current_judgment.confidence_a,
+            ctx.current_judgment.confidence_b,
+            ctx.round_id,
+            self.ledger,
+            extra_pot_tokens=ctx.locked_pot
+        )
+        
+        ctx.tokens_awarded_a = dist.tokens_a
+        ctx.tokens_awarded_b = dist.tokens_b
+        
+        if transcript:
+            transcript.tokens_awarded_a = dist.tokens_a
+            transcript.tokens_awarded_b = dist.tokens_b
+        
+        return ctx
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # Build Result
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    def _build_result(self, ctx: DynamicRoundContext) -> DynamicRoundResult:
+        """Convert context to result."""
+        return DynamicRoundResult(
+            round_id=ctx.round_id,
+            topic=ctx.topic,
+            argument_a=ctx.arg_a,
+            argument_b=ctx.arg_b,
+            initial_judgment=ctx.initial_judgment,
+            final_judgment=ctx.current_judgment,
+            tokens_awarded_a=ctx.tokens_awarded_a,
+            tokens_awarded_b=ctx.tokens_awarded_b,
+            iterations_completed=ctx.iterations_completed,
+            termination_reason=ctx.termination_reason,
+            all_bets=ctx.all_bets,
+            all_counters=ctx.all_counters,
+        )

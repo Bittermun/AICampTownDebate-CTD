@@ -1,13 +1,53 @@
 """
 Round: Single debate round logic with proper re-evaluation after counter-arguments.
+Refactored into discrete phases with explicit state management.
 """
 from dataclasses import dataclass, field
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, List
 from ..models import Debater, BaseJudge, Argument, Judgment, BetType, BetDecision
-from ..economy import TokenLedger, BettingManager, TokenDistributor
+from ..economy import TokenLedger, BettingManager, TokenDistributor, Bet
 
 if TYPE_CHECKING:
     from ..logs import RoundTranscript
+
+
+@dataclass
+class RoundContext:
+    """Explicit state container for round execution.
+    
+    All phase functions read from and write to this context,
+    making state flow explicit and testable.
+    """
+    round_id: int
+    topic: str
+    token_cost_ratio: int = 20
+    
+    # Phase 1: Arguments
+    arg_a: Optional[Argument] = None
+    arg_b: Optional[Argument] = None
+    
+    # Phase 2: Initial Judgment
+    initial_judgment: Optional[Judgment] = None
+    
+    # Phase 3: Betting
+    decision_a: Optional[BetDecision] = None
+    decision_b: Optional[BetDecision] = None
+    bet_a: Optional[Bet] = None
+    bet_b: Optional[Bet] = None
+    counter_a: Optional[Argument] = None
+    counter_b: Optional[Argument] = None
+    research_a: Optional[Argument] = None
+    research_b: Optional[Argument] = None
+    round_pot_extra: float = 0.0
+    counter_args: List[Argument] = field(default_factory=list)
+    bets: List[Bet] = field(default_factory=list)
+    
+    # Phase 4: Final Judgment
+    final_judgment: Optional[Judgment] = None
+    
+    # Phase 5: Distribution
+    tokens_awarded_a: float = 0.0
+    tokens_awarded_b: float = 0.0
 
 
 @dataclass
@@ -17,7 +57,7 @@ class RoundResult:
     argument_a: Argument
     argument_b: Argument
     initial_judgment: Judgment
-    final_judgment: Optional[Judgment]  # After counter-arguments
+    final_judgment: Optional[Judgment]
     tokens_awarded_a: float
     tokens_awarded_b: float
     counter_arguments: list[Argument] = field(default_factory=list)
@@ -36,11 +76,10 @@ class DebateRound:
     Flow:
     1. Both debaters generate initial arguments
     2. Judge evaluates → initial confidence scores
-    3. Tokens distributed based on initial judgment
-    4. Debaters decide whether to bet on counter-arguments
-    5. Counter-arguments generated (if betting)
-    6. Judge RE-EVALUATES with counter-arguments included
-    7. Bets resolved: win if your confidence improved
+    3. Debaters decide whether to bet on counter-arguments
+    4. Counter-arguments generated (if betting)
+    5. Judge RE-EVALUATES with counter-arguments included
+    6. Tokens distributed via pot split
     """
     
     def __init__(
@@ -64,238 +103,297 @@ class DebateRound:
         topic: str,
         round_id: int,
         transcript: Optional["RoundTranscript"] = None,
-        token_cost_ratio: int = 20,  # 20 LLM tokens = 1 economic token
+        token_cost_ratio: int = 20,
     ) -> RoundResult:
-        """Execute a complete debate round."""
+        """Execute a complete debate round via phase pipeline."""
+        ctx = RoundContext(round_id=round_id, topic=topic, token_cost_ratio=token_cost_ratio)
         
-        # Phase 1: Initial arguments (with token awareness)
+        ctx = self._phase_generate_arguments(ctx, transcript)
+        ctx = self._phase_initial_judgment(ctx, transcript)
+        ctx = self._phase_betting(ctx, transcript)
+        ctx = self._phase_final_judgment(ctx, transcript)
+        ctx = self._phase_distribute_tokens(ctx, transcript)
+        
+        return self._build_result(ctx)
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 1: Generate Arguments
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    def _phase_generate_arguments(
+        self, ctx: RoundContext, transcript: Optional["RoundTranscript"]
+    ) -> RoundContext:
+        """Both debaters generate initial arguments with token awareness."""
         balance_a = self.ledger.balance(self.debater_a.name)
         balance_b = self.ledger.balance(self.debater_b.name)
-        arg_a = self.debater_a.generate_argument(topic, round_id, current_balance=balance_a)
-        arg_b = self.debater_b.generate_argument(topic, round_id, current_balance=balance_b)
+        
+        ctx.arg_a = self.debater_a.generate_argument(ctx.topic, ctx.round_id, current_balance=balance_a)
+        ctx.arg_b = self.debater_b.generate_argument(ctx.topic, ctx.round_id, current_balance=balance_b)
         
         # Deduct token costs (20:1 ratio)
-        cost_a = arg_a.llm_tokens_used // token_cost_ratio
-        cost_b = arg_b.llm_tokens_used // token_cost_ratio
+        cost_a = ctx.arg_a.llm_tokens_used // ctx.token_cost_ratio
+        cost_b = ctx.arg_b.llm_tokens_used // ctx.token_cost_ratio
+        
         if cost_a > 0:
-            self.ledger.deduct(self.debater_a.name, cost_a, "generation_cost", round_id)
+            self.ledger.deduct(self.debater_a.name, cost_a, "generation_cost", ctx.round_id)
         if cost_b > 0:
-            self.ledger.deduct(self.debater_b.name, cost_b, "generation_cost", round_id)
+            self.ledger.deduct(self.debater_b.name, cost_b, "generation_cost", ctx.round_id)
         
         if transcript:
-            transcript.add_argument(self.debater_a.name, arg_a.content)
-            transcript.add_argument(self.debater_b.name, arg_b.content)
+            transcript.add_argument(self.debater_a.name, ctx.arg_a.content)
+            transcript.add_argument(self.debater_b.name, ctx.arg_b.content)
         
-        # Phase 3: Initial judgment (No award yet, just recording)
+        # Postcondition: arguments must exist
+        assert ctx.arg_a is not None, "Phase 1 failed: arg_a not generated"
+        assert ctx.arg_b is not None, "Phase 1 failed: arg_b not generated"
+        return ctx
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 2: Initial Judgment
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    def _phase_initial_judgment(
+        self, ctx: RoundContext, transcript: Optional["RoundTranscript"]
+    ) -> RoundContext:
+        """Judge evaluates initial arguments."""
         self.judge.reset()  # Amnesia
-        initial_judgment = self.judge.evaluate(
-            topic, arg_a.content, arg_b.content, round_id
+        ctx.initial_judgment = self.judge.evaluate(
+            ctx.topic, ctx.arg_a.content, ctx.arg_b.content, ctx.round_id
         )
         
         if transcript:
             transcript.add_judgment(
                 self.judge.name + " (initial)",
-                initial_judgment.reasoning,
-                initial_judgment.confidence_a,
-                initial_judgment.confidence_b,
-                sub_judgments=initial_judgment.sub_judgments
+                ctx.initial_judgment.reasoning,
+                ctx.initial_judgment.confidence_a,
+                ctx.initial_judgment.confidence_b,
+                sub_judgments=ctx.initial_judgment.sub_judgments
             )
         
-        # Phase 4: Betting and counter-arguments
-        bets = []
-        counter_args = []
-        counter_a = None
-        counter_b = None
-        round_pot_extra = 0.0
+        # Postcondition: judgment must exist with valid confidences
+        assert ctx.initial_judgment is not None, "Phase 2 failed: no judgment"
+        assert 0 <= ctx.initial_judgment.confidence_a <= 1, "Invalid confidence_a"
+        assert 0 <= ctx.initial_judgment.confidence_b <= 1, "Invalid confidence_b"
+        return ctx
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 3: Betting (REFUTE / RESEARCH / PASS)
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    def _phase_betting(
+        self, ctx: RoundContext, transcript: Optional["RoundTranscript"]
+    ) -> RoundContext:
+        """Collect betting decisions and generate counter-arguments/research."""
+        # Debater A decides
+        ctx = self._process_debater_bet(
+            ctx, transcript,
+            debater=self.debater_a,
+            own_arg=ctx.arg_a,
+            opponent_arg=ctx.arg_b,
+            conf_self=ctx.initial_judgment.confidence_a,
+            conf_opponent=ctx.initial_judgment.confidence_b,
+            is_debater_a=True,
+        )
         
-        # Debater A decides to bet?
-        decision_a = self.debater_a.decide_bet(
-            self.ledger.balance(self.debater_a.name),
-            arg_b.content,
-            arg_a.content,
-            confidence_self=initial_judgment.confidence_a,
-            confidence_opponent=initial_judgment.confidence_b,
+        # Debater B decides
+        ctx = self._process_debater_bet(
+            ctx, transcript,
+            debater=self.debater_b,
+            own_arg=ctx.arg_b,
+            opponent_arg=ctx.arg_a,
+            conf_self=ctx.initial_judgment.confidence_b,
+            conf_opponent=ctx.initial_judgment.confidence_a,
+            is_debater_a=False,
+        )
+        
+        return ctx
+    
+    def _process_debater_bet(
+        self,
+        ctx: RoundContext,
+        transcript: Optional["RoundTranscript"],
+        debater: Debater,
+        own_arg: Argument,
+        opponent_arg: Argument,
+        conf_self: float,
+        conf_opponent: float,
+        is_debater_a: bool,
+    ) -> RoundContext:
+        """Process a single debater's betting decision."""
+        decision = debater.decide_bet(
+            self.ledger.balance(debater.name),
+            opponent_arg.content,
+            own_arg.content,
+            confidence_self=conf_self,
+            confidence_opponent=conf_opponent,
         )
         
         if transcript:
             transcript.add_deliberation(
-                self.debater_a.name,
-                decision_a.bet_type.value,
-                decision_a.amount,
-                decision_a.reasoning,
+                debater.name,
+                decision.bet_type.value,
+                decision.amount,
+                decision.reasoning,
             )
         
-        bet_a = None
-        research_a = None
-        if decision_a.bet_type != BetType.PASS:
-            bet_a = self.betting.place_bet(
-                self.debater_a.name, decision_a.amount, round_id, self.ledger
+        # Store decision
+        if is_debater_a:
+            ctx.decision_a = decision
+        else:
+            ctx.decision_b = decision
+        
+        if decision.bet_type == BetType.PASS:
+            return ctx
+        
+        # Place bet
+        bet = self.betting.place_bet(debater.name, decision.amount, ctx.round_id, self.ledger)
+        if not bet:
+            return ctx
+        
+        ctx.bets.append(bet)
+        ctx.round_pot_extra += bet.amount
+        
+        if is_debater_a:
+            ctx.bet_a = bet
+        else:
+            ctx.bet_b = bet
+        
+        current_bal = self.ledger.balance(debater.name)
+        
+        # Generate counter or research
+        if decision.bet_type == BetType.REFUTATION:
+            counter = debater.generate_argument(
+                ctx.topic, ctx.round_id,
+                opponent_argument=opponent_arg.content,
+                current_balance=current_bal,
+                confidence_self=conf_self,
+                confidence_opponent=conf_opponent,
             )
-            if bet_a:
-                bets.append(bet_a)
-                round_pot_extra += bet_a.amount
-                current_bal_a = self.ledger.balance(self.debater_a.name)
-                
-                if decision_a.bet_type == BetType.REFUTATION:
-                    counter_a = self.debater_a.generate_argument(
-                        topic, round_id, 
-                        opponent_argument=arg_b.content, 
-                        current_balance=current_bal_a,
-                        confidence_self=initial_judgment.confidence_a,
-                        confidence_opponent=initial_judgment.confidence_b,
-                    )
-                    counter_cost_a = counter_a.llm_tokens_used // token_cost_ratio
-                    if counter_cost_a > 0:
-                        self.ledger.deduct(self.debater_a.name, counter_cost_a, "counter_generation_cost", round_id)
-                    counter_a.tokens_bet = decision_a.amount
-                    counter_args.append(counter_a)
-                    if transcript:
-                        transcript.add_argument(
-                            self.debater_a.name, counter_a.content,
-                            is_counter=True, tokens_bet=decision_a.amount
-                        )
-                else:
-                    research_a = self.debater_a.generate_research(
-                        topic, round_id, 
-                        arg_a.content, 
-                        current_balance=current_bal_a,
-                        confidence_self=initial_judgment.confidence_a,
-                        confidence_opponent=initial_judgment.confidence_b,
-                    )
-                    research_cost_a = research_a.llm_tokens_used // token_cost_ratio
-                    if research_cost_a > 0:
-                        self.ledger.deduct(self.debater_a.name, research_cost_a, "research_generation_cost", round_id)
-                    research_a.tokens_bet = decision_a.amount
-                    counter_args.append(research_a)
-                    if transcript:
-                        transcript.add_argument(
-                            self.debater_a.name, research_a.content,
-                            is_counter=False, tokens_bet=decision_a.amount
-                        )
-        
-        # Debater B decides to bet?
-        decision_b = self.debater_b.decide_bet(
-            self.ledger.balance(self.debater_b.name),
-            arg_a.content,
-            arg_b.content,
-            confidence_self=initial_judgment.confidence_b,
-            confidence_opponent=initial_judgment.confidence_a,
-        )
-        
-        if transcript:
-            transcript.add_deliberation(
-                self.debater_b.name,
-                decision_b.bet_type.value,
-                decision_b.amount,
-                decision_b.reasoning,
+            counter_cost = counter.llm_tokens_used // ctx.token_cost_ratio
+            if counter_cost > 0:
+                self.ledger.deduct(debater.name, counter_cost, "counter_generation_cost", ctx.round_id)
+            counter.tokens_bet = decision.amount
+            ctx.counter_args.append(counter)
+            
+            if is_debater_a:
+                ctx.counter_a = counter
+            else:
+                ctx.counter_b = counter
+            
+            if transcript:
+                transcript.add_argument(debater.name, counter.content, is_counter=True, tokens_bet=decision.amount)
+        else:
+            # RESEARCH
+            research = debater.generate_research(
+                ctx.topic, ctx.round_id,
+                own_arg.content,
+                current_balance=current_bal,
+                confidence_self=conf_self,
+                confidence_opponent=conf_opponent,
             )
+            research_cost = research.llm_tokens_used // ctx.token_cost_ratio
+            if research_cost > 0:
+                self.ledger.deduct(debater.name, research_cost, "research_generation_cost", ctx.round_id)
+            research.tokens_bet = decision.amount
+            ctx.counter_args.append(research)
+            
+            if is_debater_a:
+                ctx.research_a = research
+            else:
+                ctx.research_b = research
+            
+            if transcript:
+                transcript.add_argument(debater.name, research.content, is_counter=False, tokens_bet=decision.amount)
         
-        bet_b = None
-        research_b = None
-        if decision_b.bet_type != BetType.PASS:
-            bet_b = self.betting.place_bet(
-                self.debater_b.name, decision_b.amount, round_id, self.ledger
-            )
-            if bet_b:
-                bets.append(bet_b)
-                round_pot_extra += bet_b.amount
-                current_bal_b = self.ledger.balance(self.debater_b.name)
-                
-                if decision_b.bet_type == BetType.REFUTATION:
-                    counter_b = self.debater_b.generate_argument(
-                        topic, round_id, 
-                        opponent_argument=arg_a.content, 
-                        current_balance=current_bal_b,
-                        confidence_self=initial_judgment.confidence_b,
-                        confidence_opponent=initial_judgment.confidence_a,
-                    )
-                    counter_cost_b = counter_b.llm_tokens_used // token_cost_ratio
-                    if counter_cost_b > 0:
-                        self.ledger.deduct(self.debater_b.name, counter_cost_b, "counter_generation_cost", round_id)
-                    counter_b.tokens_bet = decision_b.amount
-                    counter_args.append(counter_b)
-                    if transcript:
-                        transcript.add_argument(
-                            self.debater_b.name, counter_b.content,
-                            is_counter=True, tokens_bet=decision_b.amount
-                        )
-                else:
-                    research_b = self.debater_b.generate_research(
-                        topic, round_id, 
-                        arg_b.content, 
-                        current_balance=current_bal_b,
-                        confidence_self=initial_judgment.confidence_b,
-                        confidence_opponent=initial_judgment.confidence_a,
-                    )
-                    research_cost_b = research_b.llm_tokens_used // token_cost_ratio
-                    if research_cost_b > 0:
-                        self.ledger.deduct(self.debater_b.name, research_cost_b, "research_generation_cost", round_id)
-                    research_b.tokens_bet = decision_b.amount
-                    counter_args.append(research_b)
-                    if transcript:
-                        transcript.add_argument(
-                            self.debater_b.name, research_b.content,
-                            is_counter=False, tokens_bet=decision_b.amount
-                        )
-        
-        # Phase 5: Re-evaluation
-        final_judgment = None
-        
+        return ctx
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 4: Final Judgment
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    def _phase_final_judgment(
+        self, ctx: RoundContext, transcript: Optional["RoundTranscript"]
+    ) -> RoundContext:
+        """Judge re-evaluates with combined arguments."""
         # Build combined arguments
-        combined_a = arg_a.content
-        combined_b = arg_b.content
-        if counter_a: combined_a += f"\n\n[COUNTER-ARGUMENT]\n{counter_a.content}"
-        if research_a: combined_a += f"\n\n[RESEARCH]\n{research_a.content}"
-        if counter_b: combined_b += f"\n\n[COUNTER-ARGUMENT]\n{counter_b.content}"
-        if research_b: combined_b += f"\n\n[RESEARCH]\n{research_b.content}"
+        combined_a = ctx.arg_a.content
+        combined_b = ctx.arg_b.content
         
-        # Judge re-evaluates
+        if ctx.counter_a:
+            combined_a += f"\n\n[COUNTER-ARGUMENT]\n{ctx.counter_a.content}"
+        if ctx.research_a:
+            combined_a += f"\n\n[RESEARCH]\n{ctx.research_a.content}"
+        if ctx.counter_b:
+            combined_b += f"\n\n[COUNTER-ARGUMENT]\n{ctx.counter_b.content}"
+        if ctx.research_b:
+            combined_b += f"\n\n[RESEARCH]\n{ctx.research_b.content}"
+        
         self.judge.reset()
-        final_judgment = self.judge.evaluate(
-            topic, combined_a, combined_b, round_id
-        )
+        ctx.final_judgment = self.judge.evaluate(ctx.topic, combined_a, combined_b, ctx.round_id)
         
         if transcript:
             transcript.add_judgment(
                 self.judge.name + " (final)",
-                final_judgment.reasoning,
-                final_judgment.confidence_a,
-                final_judgment.confidence_b,
-                sub_judgments=final_judgment.sub_judgments
+                ctx.final_judgment.reasoning,
+                ctx.final_judgment.confidence_a,
+                ctx.final_judgment.confidence_b,
+                sub_judgments=ctx.final_judgment.sub_judgments
             )
         
-        # Phase 6: Resolved Pool Split
+        # Postcondition: final judgment must exist
+        assert ctx.final_judgment is not None, "Phase 4 failed: no final judgment"
+        return ctx
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 5: Distribute Tokens
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    def _phase_distribute_tokens(
+        self, ctx: RoundContext, transcript: Optional["RoundTranscript"]
+    ) -> RoundContext:
+        """Pot split and bet resolution."""
         dist = self.distributor.distribute_pot(
             self.debater_a.name,
             self.debater_b.name,
-            final_judgment.confidence_a,
-            final_judgment.confidence_b,
-            round_id,
+            ctx.final_judgment.confidence_a,
+            ctx.final_judgment.confidence_b,
+            ctx.round_id,
             self.ledger,
-            extra_pot_tokens=round_pot_extra
+            extra_pot_tokens=ctx.round_pot_extra
         )
+        
+        ctx.tokens_awarded_a = dist.tokens_a
+        ctx.tokens_awarded_b = dist.tokens_b
         
         if transcript:
             transcript.tokens_awarded_a = dist.tokens_a
             transcript.tokens_awarded_b = dist.tokens_b
             
-            # Record virtual bet outcomes for transcript
-            if bet_a:
-                won = final_judgment.confidence_a > initial_judgment.confidence_a
+            # Record bet outcomes
+            if ctx.bet_a:
+                won = ctx.final_judgment.confidence_a > ctx.initial_judgment.confidence_a
                 transcript.add_bet_resolution(self.debater_a.name, won, dist.tokens_a)
-            if bet_b:
-                won = final_judgment.confidence_b > initial_judgment.confidence_b
+            if ctx.bet_b:
+                won = ctx.final_judgment.confidence_b > ctx.initial_judgment.confidence_b
                 transcript.add_bet_resolution(self.debater_b.name, won, dist.tokens_b)
         
+        return ctx
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # Build Result
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    def _build_result(self, ctx: RoundContext) -> RoundResult:
+        """Convert RoundContext to RoundResult."""
         return RoundResult(
-            round_id=round_id,
-            topic=topic,
-            argument_a=arg_a,
-            argument_b=arg_b,
-            initial_judgment=initial_judgment,
-            final_judgment=final_judgment,
-            tokens_awarded_a=dist.tokens_a,
-            tokens_awarded_b=dist.tokens_b,
-            counter_arguments=counter_args,
-            bets_placed=bets,
+            round_id=ctx.round_id,
+            topic=ctx.topic,
+            argument_a=ctx.arg_a,
+            argument_b=ctx.arg_b,
+            initial_judgment=ctx.initial_judgment,
+            final_judgment=ctx.final_judgment,
+            tokens_awarded_a=ctx.tokens_awarded_a,
+            tokens_awarded_b=ctx.tokens_awarded_b,
+            counter_arguments=ctx.counter_args,
+            bets_placed=ctx.bets,
         )

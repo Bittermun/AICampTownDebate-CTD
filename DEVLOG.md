@@ -3,6 +3,85 @@
 Append-only journal. Each session adds entries at the top.
 
 ---
+
+## 2026-01-17 | Session 8: Scaling Fees (Cool-down Mechanics)
+
+### What Happened
+- Implemented **incrementally increasing fees** for dynamic betting loops.
+- Fees start at 5% for iteration 1 and increase by 5% per iteration (e.g., Iter 10 = 50% fee).
+- Added a hard cap of 50% on fees to prevent complete lockout while maintaining pressure.
+- Modified `BettingManager.place_bet` to support `custom_fee_rate` overrides.
+
+### Files Modified
+- `src/economy/betting.py` - Support custom fee rates in `place_bet`.
+- `src/arena/dynamic_round.py` - Calculate iteration fees (5% * i) with 50% cap.
+
+### Test Results
+- Verified via `verify_scaling_fees.py`:
+  - Iteration 1: 5% fee
+  - Iteration 5: 25% fee
+  - Iteration 12: 50% fee (capped)
+
+---
+
+
+### What Happened
+- Implemented `DynamicDebateRound` class with iterative betting loop
+- Debates now continue until both debaters PASS simultaneously or safety limit (10 iterations)
+- Added pot locking—tokens bet accumulate and distribute only at endgame
+- Added graceful error handling for judge validation failures during iterations
+- Created `demo_dynamic.py` for testing dynamic mode
+
+### Files Modified
+- `src/arena/dynamic_round.py` - [NEW] `DynamicDebateRound`, `DynamicRoundContext`, `DynamicRoundResult`
+- `src/arena/__init__.py` - Export new classes
+- `demo_dynamic.py` - [NEW] Demo script for dynamic mode
+
+### Test Results
+- 9 iterations, terminated on `mutual_pass`
+- 15 total bets placed
+- Winner: Debater_Alpha (114.5 tokens vs 93.2)
+- Judge validation warnings handled gracefully (2 failures during run)
+
+---
+
+## 2026-01-16 | Session 6 (Continued): Robustness Improvements
+
+### What Happened
+- **Eliminated parsing failures**: Implemented Pydantic-based structured extraction for all LLM responses.
+  - Added `format: "json"` to Ollama backend for forced JSON output
+  - Created `JudgmentResponse` and `DeliberationResponse` Pydantic models
+  - Replaced regex parsing with `model_validate_json()` + auto-normalization
+- **Fixed private API leakage**: `ConsensusJudge` now uses public `generate_judgment()` method instead of accessing internal `_ollama` and `_parse_response`.
+- **Added resilience to multi-judge systems**: `EnsembleJudge` and `ConsensusJudge` now catch individual sub-judge failures gracefully—one failure doesn't crash the entire ensemble.
+- **Added economy invariant checks**: Token distribution now asserts that awarded tokens equal the pot (prevents silent token leaks).
+- **Decomposed `round.py` god-method**: The 240-line `run()` is now 12 lines orchestrating 5 discrete phase functions.
+
+### Key Decisions
+- **DEC-019**: Validation failures reject the round (no more 0.5/0.5 "Shadow Ties").
+- **DEC-020**: Ensemble judges continue with partial results if some sub-judges fail.
+- **DEC-021**: `RoundContext` dataclass holds all state explicitly, making phase transitions testable.
+
+### Files Modified
+- `src/models/response_models.py` - [NEW] Pydantic models for LLM responses
+- `src/models/ollama_backend.py` - Added `json_mode` parameter
+- `src/models/judge.py` - Added `_validate_response()`, `generate_judgment()`, fixed ConsensusJudge
+- `src/economy/distribution.py` - Added token invariant assertion
+- `src/arena/round.py` - [MAJOR] Full refactor into phase functions
+
+### Architecture Change: Phase Pipeline
+
+```
+run() → RoundContext
+    ├─ _phase_generate_arguments()
+    ├─ _phase_initial_judgment()
+    ├─ _phase_betting()
+    ├─ _phase_final_judgment()
+    └─ _phase_distribute_tokens()
+```
+
+---
+
 18: 
 19: ## 2026-01-15 | Session 5: Payouts, Symmetry, and Ensembles
 20: 

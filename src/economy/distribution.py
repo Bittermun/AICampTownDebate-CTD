@@ -43,6 +43,10 @@ class TokenDistributor:
             tokens_a = total_pot * (confidence_a / total_conf)
             tokens_b = total_pot * (confidence_b / total_conf)
         
+        # Invariant check: tokens awarded must equal tokens available (prevents leaks)
+        assert abs(tokens_a + tokens_b - total_pot) < 0.01, \
+            f"Token leak detected: awarded {tokens_a + tokens_b}, pot was {total_pot}"
+        
         # Awards
         ledger.award(agent_a_id, tokens_a, "pot_split", round_id)
         ledger.award(agent_b_id, tokens_b, "pot_split", round_id)
