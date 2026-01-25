@@ -10,10 +10,11 @@ from dataclasses import dataclass, field
 from typing import Optional, TYPE_CHECKING, List
 from ..models import Debater, BaseJudge, Argument, Judgment, BetType, BetDecision
 from ..economy import TokenLedger, BettingManager, TokenDistributor, Bet
+from ..logs import Turn  # For transcript entries
+from ..tools import get_research_tool
 
 if TYPE_CHECKING:
     from ..logs import RoundTranscript
-
 
 @dataclass
 class DynamicRoundContext:
@@ -47,6 +48,19 @@ class DynamicRoundContext:
     all_bets: List[Bet] = field(default_factory=list)
     all_counters: List[Argument] = field(default_factory=list)
     
+    # Metrics tracking (for observers)
+    initial_balance_a: float = 0.0  # Starting balance
+    initial_balance_b: float = 0.0
+    gen_cost_a: float = 0.0  # Cumulative generation cost
+    gen_cost_b: float = 0.0
+    total_bet_amount_a: float = 0.0  # Total tokens bet (before fees)
+    total_bet_amount_b: float = 0.0
+    bet_count_a: int = 0
+    bet_count_b: int = 0
+    pass_count_a: int = 0
+    pass_count_b: int = 0
+    confidence_trajectory: List[tuple] = field(default_factory=list)  # [(iter, conf_a, conf_b)]
+    
     # Termination tracking
     iterations_completed: int = 0
     termination_reason: str = ""  # "mutual_pass", "max_iterations", "bankruptcy"
@@ -71,6 +85,7 @@ class DynamicRoundResult:
     termination_reason: str
     all_bets: List[Bet] = field(default_factory=list)
     all_counters: List[Argument] = field(default_factory=list)
+    observation_reports: List = field(default_factory=list)  # ObservationReport list
     
     @property
     def judgment(self) -> Judgment:
@@ -103,6 +118,9 @@ class DynamicDebateRound:
         betting: BettingManager,
         distributor: TokenDistributor,
         max_iterations: int = 10,
+        observers: Optional[List] = None,  # List of Observer protocol objects
+        split_pot_enabled: bool = False,   # Pay initial bounty after first judgment
+        initial_pot_amount: float = 40.0,  # Amount to distribute as initial bounty
     ):
         self.debater_a = debater_a
         self.debater_b = debater_b
@@ -111,6 +129,10 @@ class DynamicDebateRound:
         self.betting = betting
         self.distributor = distributor
         self.max_iterations = max_iterations
+        self.observers = observers or []
+        self.split_pot_enabled = split_pot_enabled
+        self.initial_pot_amount = initial_pot_amount
+
     
     def run(
         self,
@@ -127,19 +149,66 @@ class DynamicDebateRound:
             max_iterations=self.max_iterations,
         )
         
+        # Capture initial balances for metrics
+        ctx.initial_balance_a = self.ledger.balance(self.debater_a.name)
+        ctx.initial_balance_b = self.ledger.balance(self.debater_b.name)
+        
         # Phase 1: Generate initial arguments (once)
         ctx = self._phase_generate_arguments(ctx, transcript)
         
         # Phase 2: Initial judgment (once)
         ctx = self._phase_initial_judgment(ctx, transcript)
         
+        # Record initial confidence
+        ctx.confidence_trajectory.append((
+            0, ctx.initial_judgment.confidence_a, ctx.initial_judgment.confidence_b
+        ))
+        
+        # Phase 2b: Initial Bounty Distribution (if split pot enabled)
+        if self.split_pot_enabled and self.initial_pot_amount > 0:
+            # Calculate split based on initial confidence
+            total_conf = ctx.initial_judgment.confidence_a + ctx.initial_judgment.confidence_b
+            if total_conf > 0:
+                tokens_a = self.initial_pot_amount * (ctx.initial_judgment.confidence_a / total_conf)
+                tokens_b = self.initial_pot_amount * (ctx.initial_judgment.confidence_b / total_conf)
+            else:
+                tokens_a = self.initial_pot_amount / 2
+                tokens_b = self.initial_pot_amount / 2
+            
+            # Award to ledger (credit = award in TokenLedger API)
+            self.ledger.award(self.debater_a.name, tokens_a, "initial_bounty", ctx.round_id)
+            self.ledger.award(self.debater_b.name, tokens_b, "initial_bounty", ctx.round_id)
+            
+            # Track in context for observers
+            ctx.tokens_awarded_a += tokens_a
+            ctx.tokens_awarded_b += tokens_b
+            
+            if transcript:
+                transcript.turns.append(Turn(
+                    speaker="System",
+                    content=f"**Initial Bounty Distributed**: A={tokens_a:.1f}, B={tokens_b:.1f} (from {self.initial_pot_amount} pot)",
+                    turn_type="payout",
+                    round_id=ctx.round_id,
+                ))
+
+        
         # Phase 3: Iterative betting loop
         ctx = self._betting_loop(ctx, transcript)
+
         
         # Phase 4: Final distribution
         ctx = self._phase_distribute_tokens(ctx, transcript)
         
-        return self._build_result(ctx)
+        # Finalize observers AFTER distribution (so they see tokens_awarded)
+        observation_reports = []
+        for observer in self.observers:
+            try:
+                report = observer.finalize(ctx)
+                observation_reports.append(report)
+            except Exception as e:
+                print(f"  [Warning] Observer {observer.name} failed: {e}")
+        
+        return self._build_result(ctx, observation_reports)
     
     # ─────────────────────────────────────────────────────────────────────────
     # Phase 1: Generate Arguments (runs once)
@@ -154,6 +223,45 @@ class DynamicDebateRound:
         
         ctx.arg_a = self.debater_a.generate_argument(ctx.topic, ctx.round_id, current_balance=balance_a)
         ctx.arg_b = self.debater_b.generate_argument(ctx.topic, ctx.round_id, current_balance=balance_b)
+        
+        # Deduct token costs
+        cost_a = ctx.arg_a.llm_tokens_used // ctx.token_cost_ratio
+        cost_b = ctx.arg_b.llm_tokens_used // ctx.token_cost_ratio
+        
+        if cost_a > 0:
+            self.ledger.deduct(self.debater_a.name, cost_a, "generation_cost", ctx.round_id)
+        if cost_b > 0:
+            self.ledger.deduct(self.debater_b.name, cost_b, "generation_cost", ctx.round_id)
+        
+        # Initialize combined arguments
+        ctx.combined_a = ctx.arg_a.content
+        ctx.combined_b = ctx.arg_b.content
+        
+        if transcript:
+            transcript.add_argument(self.debater_a.name, ctx.arg_a.content)
+            transcript.add_argument(self.debater_b.name, ctx.arg_b.content)
+        
+        assert ctx.arg_a is not None, "Phase 1 failed: arg_a not generated"
+        assert ctx.arg_b is not None, "Phase 1 failed: arg_b not generated"
+        return ctx
+    
+    async def _phase_generate_arguments_async(
+        self, ctx: DynamicRoundContext, transcript: Optional["RoundTranscript"]
+    ) -> DynamicRoundContext:
+        """Both debaters generate initial arguments IN PARALLEL.
+        
+        Uses asyncio.gather for concurrent generation, reducing wall-clock time.
+        """
+        import asyncio
+        
+        balance_a = self.ledger.balance(self.debater_a.name)
+        balance_b = self.ledger.balance(self.debater_b.name)
+        
+        # Parallel generation
+        ctx.arg_a, ctx.arg_b = await asyncio.gather(
+            self.debater_a.generate_argument_async(ctx.topic, ctx.round_id, current_balance=balance_a),
+            self.debater_b.generate_argument_async(ctx.topic, ctx.round_id, current_balance=balance_b),
+        )
         
         # Deduct token costs
         cost_a = ctx.arg_a.llm_tokens_used // ctx.token_cost_ratio
@@ -243,31 +351,85 @@ class DynamicDebateRound:
                 confidence_opponent=ctx.current_judgment.confidence_a,
             )
             
+            # Deduct deliberation costs (thinking is not free!)
+            delib_cost_a = ctx.decision_a.llm_tokens_used // ctx.token_cost_ratio
+            delib_cost_b = ctx.decision_b.llm_tokens_used // ctx.token_cost_ratio
+            
+            if delib_cost_a > 0:
+                self.ledger.deduct(self.debater_a.name, delib_cost_a, "deliberation_cost", ctx.round_id)
+                ctx.gen_cost_a += delib_cost_a
+            if delib_cost_b > 0:
+                self.ledger.deduct(self.debater_b.name, delib_cost_b, "deliberation_cost", ctx.round_id)
+                ctx.gen_cost_b += delib_cost_b
+            
+            # Log deliberations with ITMC thinking to transcript
+            if transcript:
+                transcript.add_deliberation(
+                    speaker=self.debater_a.name,
+                    decision=ctx.decision_a.bet_type.value,
+                    amount=ctx.decision_a.amount,
+                    reasoning=ctx.decision_a.reasoning,
+                )
+                transcript.add_deliberation(
+                    speaker=self.debater_b.name,
+                    decision=ctx.decision_b.bet_type.value,
+                    amount=ctx.decision_b.amount,
+                    reasoning=ctx.decision_b.reasoning,
+                )
+            
+            # Update balances after deliberation costs
+            balance_a = self.ledger.balance(self.debater_a.name)
+            balance_b = self.ledger.balance(self.debater_b.name)
+
+            
             if transcript:
                 transcript.add_deliberation(
                     self.debater_a.name,
                     ctx.decision_a.bet_type.value,
                     ctx.decision_a.amount,
                     f"[Iter {ctx.iteration}] {ctx.decision_a.reasoning}",
+                    include_context=True,
+                    balance=balance_a,
+                    confidence_self=ctx.current_judgment.confidence_a,
+                    confidence_opponent=ctx.current_judgment.confidence_b,
+                    own_summary=ctx.combined_a[:400],
+                    opponent_summary=ctx.combined_b[:400],
                 )
                 transcript.add_deliberation(
                     self.debater_b.name,
                     ctx.decision_b.bet_type.value,
                     ctx.decision_b.amount,
                     f"[Iter {ctx.iteration}] {ctx.decision_b.reasoning}",
+                    include_context=True,
+                    balance=balance_b,
+                    confidence_self=ctx.current_judgment.confidence_b,
+                    confidence_opponent=ctx.current_judgment.confidence_a,
+                    own_summary=ctx.combined_b[:400],
+                    opponent_summary=ctx.combined_a[:400],
                 )
+
             
             # Check mutual PASS
             if ctx.decision_a.bet_type == BetType.PASS and ctx.decision_b.bet_type == BetType.PASS:
+                ctx.pass_count_a += 1
+                ctx.pass_count_b += 1
                 ctx.termination_reason = "mutual_pass"
                 ctx.iterations_completed = ctx.iteration
                 break
             
+            # Track pass counts for non-mutual PASS
+            if ctx.decision_a.bet_type == BetType.PASS:
+                ctx.pass_count_a += 1
+            if ctx.decision_b.bet_type == BetType.PASS:
+                ctx.pass_count_b += 1
+            
             # Process bets for active participants
             if ctx.decision_a.bet_type != BetType.PASS:
+                ctx.bet_count_a += 1
                 ctx = self._process_bet(ctx, transcript, is_debater_a=True)
             
             if ctx.decision_b.bet_type != BetType.PASS:
+                ctx.bet_count_b += 1
                 ctx = self._process_bet(ctx, transcript, is_debater_a=False)
             
             # Re-evaluate with updated combined arguments
@@ -298,6 +460,18 @@ class DynamicDebateRound:
                         sub_judgments=None
                     )
             
+            # Track confidence trajectory
+            ctx.confidence_trajectory.append((
+                ctx.iteration,
+                ctx.current_judgment.confidence_a,
+                ctx.current_judgment.confidence_b
+            ))
+            
+            # Notify observers of iteration completion
+            for observer in self.observers:
+                if hasattr(observer, 'on_iteration'):
+                    observer.on_iteration(ctx, ctx.iteration)
+            
             ctx.iterations_completed = ctx.iteration
         
         # If we exited due to max iterations
@@ -318,6 +492,9 @@ class DynamicDebateRound:
         decision = ctx.decision_a if is_debater_a else ctx.decision_b
         opponent_combined = ctx.combined_b if is_debater_a else ctx.combined_a
         own_combined = ctx.combined_a if is_debater_a else ctx.combined_b
+        conf_self = ctx.current_judgment.confidence_a if is_debater_a else ctx.current_judgment.confidence_b
+        conf_opponent = ctx.current_judgment.confidence_b if is_debater_a else ctx.current_judgment.confidence_a
+        
         # Calculate iteration-based fee (5% per iteration, cap at 50%)
         iteration_fee = min(0.05 * ctx.iteration, 0.50)
         
@@ -332,6 +509,11 @@ class DynamicDebateRound:
         if bet:
             ctx.all_bets.append(bet)
             ctx.locked_pot += bet.amount
+            # Track bet amount for metrics
+            if is_debater_a:
+                ctx.total_bet_amount_a += decision.amount
+            else:
+                ctx.total_bet_amount_b += decision.amount
         
         current_bal = self.ledger.balance(debater.name)
         
@@ -340,6 +522,7 @@ class DynamicDebateRound:
             counter = debater.generate_argument(
                 ctx.topic, ctx.round_id,
                 opponent_argument=opponent_combined,
+                own_history=own_combined,  # Pass debater's own history
                 current_balance=current_bal,
                 confidence_self=conf_self,
                 confidence_opponent=conf_opponent,
@@ -347,6 +530,11 @@ class DynamicDebateRound:
             counter_cost = counter.llm_tokens_used // ctx.token_cost_ratio
             if counter_cost > 0:
                 self.ledger.deduct(debater.name, counter_cost, "counter_generation_cost", ctx.round_id)
+                # Track gen cost for observers
+                if is_debater_a:
+                    ctx.gen_cost_a += counter_cost
+                else:
+                    ctx.gen_cost_b += counter_cost
             counter.tokens_bet = decision.amount
             ctx.all_counters.append(counter)
             
@@ -363,20 +551,39 @@ class DynamicDebateRound:
                 )
         
         elif decision.bet_type == BetType.RESEARCH:
+            # Execute web search via ResearchTool
+            tool = get_research_tool()
+            search_query = f"{ctx.topic} {decision.reasoning[:50]}"  # Topic + reasoning as query
+            search_result = tool.search(search_query)
+            
+            # Deduct dynamic search cost
+            search_cost = search_result.token_cost
+            self.ledger.deduct(debater.name, search_cost, "research_search_cost", ctx.round_id)
+            if is_debater_a:
+                ctx.gen_cost_a += search_cost
+            else:
+                ctx.gen_cost_b += search_cost
+            
+            # Generate research synthesis using LLM with search results
             research = debater.generate_research(
                 ctx.topic, ctx.round_id,
-                own_combined,
-                current_balance=current_bal,
+                own_argument=own_combined,
+                research_context=search_result.summary,  # Inject search results
+                current_balance=self.ledger.balance(debater.name),
                 confidence_self=conf_self,
                 confidence_opponent=conf_opponent,
             )
             research_cost = research.llm_tokens_used // ctx.token_cost_ratio
             if research_cost > 0:
                 self.ledger.deduct(debater.name, research_cost, "research_generation_cost", ctx.round_id)
+                if is_debater_a:
+                    ctx.gen_cost_a += research_cost
+                else:
+                    ctx.gen_cost_b += research_cost
             research.tokens_bet = decision.amount
             ctx.all_counters.append(research)
             
-            # Update combined argument
+            # Update combined argument with research
             if is_debater_a:
                 ctx.combined_a += f"\n\n[RESEARCH iter={ctx.iteration}]\n{research.content}"
             else:
@@ -384,7 +591,7 @@ class DynamicDebateRound:
             
             if transcript:
                 transcript.add_argument(
-                    debater.name, research.content,
+                    debater.name, f"Query: {search_query}\n{research.content}",
                     is_counter=False, tokens_bet=decision.amount
                 )
         
@@ -414,6 +621,25 @@ class DynamicDebateRound:
         if transcript:
             transcript.tokens_awarded_a = dist.tokens_a
             transcript.tokens_awarded_b = dist.tokens_b
+            
+            # Log bet resolutions for each debater
+            # In dynamic mode, "winning" means final confidence > initial confidence
+            bets_a = [b for b in ctx.all_bets if b.bettor_id == self.debater_a.name]
+            bets_b = [b for b in ctx.all_bets if b.bettor_id == self.debater_b.name]
+            
+            if bets_a:
+                total_fee_a = sum(b.fee_paid for b in bets_a)
+                won_a = ctx.current_judgment.confidence_a > ctx.initial_judgment.confidence_a
+                transcript.add_bet_resolution(
+                    self.debater_a.name, won_a, dist.tokens_a, fee_paid=total_fee_a
+                )
+            
+            if bets_b:
+                total_fee_b = sum(b.fee_paid for b in bets_b)
+                won_b = ctx.current_judgment.confidence_b > ctx.initial_judgment.confidence_b
+                transcript.add_bet_resolution(
+                    self.debater_b.name, won_b, dist.tokens_b, fee_paid=total_fee_b
+                )
         
         return ctx
     
@@ -421,7 +647,7 @@ class DynamicDebateRound:
     # Build Result
     # ─────────────────────────────────────────────────────────────────────────
     
-    def _build_result(self, ctx: DynamicRoundContext) -> DynamicRoundResult:
+    def _build_result(self, ctx: DynamicRoundContext, observation_reports: List = None) -> DynamicRoundResult:
         """Convert context to result."""
         return DynamicRoundResult(
             round_id=ctx.round_id,
@@ -436,4 +662,5 @@ class DynamicDebateRound:
             termination_reason=ctx.termination_reason,
             all_bets=ctx.all_bets,
             all_counters=ctx.all_counters,
+            observation_reports=observation_reports or [],
         )

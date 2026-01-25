@@ -79,47 +79,52 @@ class Bet:
 
 ```
 src/
+├── config_loader.py       # YAML tournament configuration parser
 ├── models/
-│   ├── debater.py      # LLM wrapper for debate
-│   └── judge.py        # LLM wrapper for judging
+│   ├── debater.py         # LLM wrapper for debate + deliberation
+│   ├── judge.py           # LLMJudge, EnsembleJudge, ConsensusJudge
+│   ├── judge_factory.py   # Factory for building judge configurations
+│   ├── ollama_backend.py  # Ollama API wrapper
+│   ├── protocols.py       # Backend/Judge interface contracts
+│   └── response_models.py # Pydantic models for LLM responses
 ├── economy/
-│   ├── ledger.py       # Token tracking
-│   ├── betting.py      # Bet mechanics
-│   └── distribution.py # Confidence → tokens
+│   ├── ledger.py          # Token tracking
+│   ├── betting.py         # Bet mechanics + scaling fees
+│   └── distribution.py    # Confidence → token distribution
 ├── arena/
-│   ├── round.py        # Single round logic
-│   ├── tournament.py   # Multi-round management
-│   └── pairing.py      # Swiss pairing
-├── prompts/
-│   ├── debate.txt      # Debater system prompt
-│   ├── judge.txt       # Judge system prompt
-│   └── topics/         # Debate topics
+│   ├── round.py           # Phase-based single round logic
+│   ├── dynamic_round.py   # Iterative betting until mutual PASS
+│   ├── observers.py       # MetricsObserver, ScribeObserver
+│   └── tournament.py      # Multi-round management
 └── logs/
-    ├── debates/        # Full transcripts
-    └── economy/        # Token history
+    └── transcript.py      # JSON + Markdown transcript export
 ```
 
 ## Configuration
 
 ```yaml
-# config.yaml
+# configs/tournament_config.yaml
 models:
-  debater: "mistral-7b-instruct-v0.2.Q4_K_M.gguf"
-  judge: "phi-3-mini-4k-instruct.Q4_K_M.gguf"
-  
+  judge_type: consensus     # "single", "ensemble", or "consensus"
+  instructor_model: "qwen2.5:7b"
+  debaters:
+    - name: "Alpha"
+      model: "qwen2.5:7b"
+    - name: "Beta"
+      model: "llama3:8b"
+  judges:
+    - model: "qwen2.5:1.5b"
+      weight: 1.0
+
 economy:
-  initial_balance: 100
+  initial_balance: 200
   max_debt: 50
-  betting_fee: 0.05          # 5% of bet
-  min_bet: 5
-  
-tournament:
-  rounds: 5
-  judges_per_debate: 1       # start simple
-  
-hardware:
-  gpu_layers: 20             # adjust for 8GB VRAM
-  context_size: 4096
+  split_pot_enabled: true
+  initial_pot_amount: 40
+
+rounds:
+  max_iterations: 10
+  topic: "Should AI be regulated?"
 ```
 
 ## Open Design Questions

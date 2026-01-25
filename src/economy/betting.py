@@ -21,6 +21,7 @@ class Bet:
     round_id: int
     status: BetStatus = BetStatus.PENDING
     payout: float = 0.0
+    fee_paid: float = 0.0  # Actual fee burned (supports scaling fees)
 
 
 class BettingManager:
@@ -69,6 +70,7 @@ class BettingManager:
             bettor_id=bettor_id,
             amount=amount,
             round_id=round_id,
+            fee_paid=fee,  # Track actual fee for scaling fee support
         )
         self._bets.append(bet)
         return bet
@@ -108,5 +110,5 @@ class BettingManager:
         return bets
     
     def total_fees_collected(self) -> float:
-        """Total fees burned across all bets."""
-        return sum(b.amount * self.fee_rate for b in self._bets)
+        """Total fees burned across all bets (supports scaling fees)."""
+        return sum(b.fee_paid for b in self._bets)

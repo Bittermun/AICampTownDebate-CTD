@@ -372,10 +372,10 @@ class DebateRound:
             # Record bet outcomes
             if ctx.bet_a:
                 won = ctx.final_judgment.confidence_a > ctx.initial_judgment.confidence_a
-                transcript.add_bet_resolution(self.debater_a.name, won, dist.tokens_a)
+                transcript.add_bet_resolution(self.debater_a.name, won, dist.tokens_a, fee_paid=ctx.bet_a.fee_paid)
             if ctx.bet_b:
                 won = ctx.final_judgment.confidence_b > ctx.initial_judgment.confidence_b
-                transcript.add_bet_resolution(self.debater_b.name, won, dist.tokens_b)
+                transcript.add_bet_resolution(self.debater_b.name, won, dist.tokens_b, fee_paid=ctx.bet_b.fee_paid)
         
         return ctx
     

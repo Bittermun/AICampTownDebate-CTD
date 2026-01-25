@@ -28,10 +28,12 @@ def test_scaling_fees():
     print(f"Calculated Fee Rate: {iteration_fee:.2f}")
     
     bal_before = ledger.balance("Alpha")
-    betting.place_bet("Alpha", 100, 1, ledger, custom_fee_rate=iteration_fee)
+    bet1 = betting.place_bet("Alpha", 100, 1, ledger, custom_fee_rate=iteration_fee)
     bal_after = ledger.balance("Alpha")
     fee_paid = bal_before - bal_after - 100
     print(f"Fee Paid: {fee_paid} (Expected: 5.0)")
+    print(f"bet.fee_paid: {bet1.fee_paid} (Expected: 5.0)")
+    assert bet1.fee_paid == 5.0, f"FAIL: bet.fee_paid={bet1.fee_paid}, expected 5.0"
     
     # Test iteration 5 fee (should be 25%)
     print("\n--- Iteration 5 (Expect 25% Fee) ---")
@@ -40,10 +42,12 @@ def test_scaling_fees():
     print(f"Calculated Fee Rate: {iteration_fee:.2f}")
     
     bal_before = ledger.balance("Alpha")
-    betting.place_bet("Alpha", 100, 1, ledger, custom_fee_rate=iteration_fee)
+    bet2 = betting.place_bet("Alpha", 100, 1, ledger, custom_fee_rate=iteration_fee)
     bal_after = ledger.balance("Alpha")
     fee_paid = bal_before - bal_after - 100
     print(f"Fee Paid: {fee_paid} (Expected: 25.0)")
+    print(f"bet.fee_paid: {bet2.fee_paid} (Expected: 25.0)")
+    assert bet2.fee_paid == 25.0, f"FAIL: bet.fee_paid={bet2.fee_paid}, expected 25.0"
 
     # Test iteration 12 fee (should be capped at 50%)
     print("\n--- Iteration 12 (Expect 50% Cap) ---")
@@ -52,10 +56,22 @@ def test_scaling_fees():
     print(f"Calculated Fee Rate: {iteration_fee:.2f}")
     
     bal_before = ledger.balance("Alpha")
-    betting.place_bet("Alpha", 100, 1, ledger, custom_fee_rate=iteration_fee)
+    bet3 = betting.place_bet("Alpha", 100, 1, ledger, custom_fee_rate=iteration_fee)
     bal_after = ledger.balance("Alpha")
     fee_paid = bal_before - bal_after - 100
     print(f"Fee Paid: {fee_paid} (Expected: 50.0)")
+    print(f"bet.fee_paid: {bet3.fee_paid} (Expected: 50.0)")
+    assert bet3.fee_paid == 50.0, f"FAIL: bet.fee_paid={bet3.fee_paid}, expected 50.0"
+
+    # Verify total_fees_collected uses actual fees (not default rate)
+    print("\n--- Verifying total_fees_collected ---")
+    expected_total = 5.0 + 25.0 + 50.0  # Sum of actual fees
+    actual_total = betting.total_fees_collected()
+    print(f"total_fees_collected(): {actual_total} (Expected: {expected_total})")
+    assert actual_total == expected_total, f"FAIL: total_fees_collected={actual_total}, expected {expected_total}"
+    
+    print("\n✅ All fee tracking tests PASSED!")
 
 if __name__ == "__main__":
     test_scaling_fees()
+

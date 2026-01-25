@@ -47,14 +47,18 @@ Round N:
 
 ## Token Economy Rules (To Be Refined)
 
-**Problem to solve:** Models shouldn't run out of 100 initial tokens immediately.
-
-**Proposed economics:**
+**Core economics:**
 - Initial balance: 200 tokens
 - Cost per response: ~proportional to LLM tokens used (20:1 ratio)
+- **Deliberation cost**: Debaters pay for betting decisions (thinking isn't free)
 - Award per round: Pot split based on final confidence
-- **Scaling Fee (Dynamic Rounds)**: 5% per iteration (Burned), capped at 50%.
-- Bet multiplier on win: Stake returned via Pot Split weight.
+- **Scaling Fee (Dynamic Rounds)**: 5% per iteration (Burned), capped at 50%
+- Bet multiplier on win: Stake returned via Pot Split weight
+
+**Split Pot (Initial Bounty):**
+- Optional `split_pot_enabled` distributes a fixed bounty (default 40 tokens) after initial arguments
+- Guarantees both debaters earn something before betting begins
+- Reduces "all-or-nothing" gambling behavior
 
 **Key constraint:** Award rate should exceed average generation cost, so models accumulate tokens over time if they argue efficiently. Verbosity is punished.
 
@@ -87,6 +91,39 @@ Evaluation is no longer limited to a single model. The system supports:
 - **LLMJudge**: Standard single-model evaluation.
 - **EnsembleJudge**: Aggregates scores from multiple models (majority/mean).
 - **Consensus/Instructor Judge**: A council of sub-judges provides notes to a "Senior Instructor" model which synthesizes the final reasoning and score.
+
+## Configuration System
+
+Tournament parameters are defined via YAML configuration files:
+
+```yaml
+models:
+  debaters:
+    - name: "Alpha"
+      model: "qwen2.5:7b"
+    - name: "Beta"
+      model: "llama3:8b"
+  judges:
+    - model: "qwen2.5:1.5b"
+      weight: 1.0
+
+economy:
+  initial_balance: 200
+  split_pot_enabled: true
+  initial_pot_amount: 40
+
+rounds:
+  max_iterations: 10
+  topic: "Should AI be regulated?"
+```
+
+**Usage:** `python demo_dynamic.py --config configs/tournament_config.yaml`
+
+This allows:
+- Different models for each debater (asymmetric capability testing)
+- Ensemble judges with weighted averaging
+- Per-experiment economy tuning
+
 
 ## LLM-Driven Deliberation
 
@@ -198,25 +235,22 @@ The system now enforces strict contracts at the LLM boundary:
 - ✅ Protocol Interfaces — Explicit contracts for backends/judges
 - ✅ Phase Invariant Assertions — Postcondition checks in round phases
 - ✅ Dynamic Round Duration — Debates continue until mutual PASS
+- ✅ Observational Models — MetricsObserver and ScribeObserver for analytics
+- ✅ Split Pot / Initial Bounty — Configurable early payout after initial judgment
+- ✅ Deliberation Token Costs — Debaters pay for "thinking" LLM calls
+- ✅ YAML Configuration System — Per-model specs for debaters/judges
+- ✅ Mixed Model Support — Different models for each participant
+- ✅ Ensemble Judging — Multiple judges with weighted averaging
 
 **Roadmap (in priority order):**
 
-1. **Observational Models** [PROPOSED]
-   - *Scribe Model*: Non-participant that summarizes rounds, tracks claims, logs strategy
-   - *Metrics Judge*: Runs alongside scoring judges, generates analytics only (no confidence contribution)
-   - Enables cross-tournament metrics: token efficiency, claim density, strategic profiles
-
-2. **Ground Truth Calibration** [FUTURE]
-   - *Scribe Model*: Non-participant that summarizes rounds, tracks claims, logs strategy
-   - *Metrics Judge*: Runs alongside scoring judges, generates analytics only (no confidence contribution)
-   - Enables cross-tournament metrics: token efficiency, claim density, strategic profiles
-
-3. **Ground Truth Calibration** [FUTURE]
+1. **Ground Truth Calibration** [FUTURE]
    - Factual topics where correctness can be verified post-debate
 
-4. **Tiered Arenas** [FUTURE]
+2. **Tiered Arenas** [FUTURE]
    - ELO-like ranking with promotion/relegation
    - Requires question generation system for scale
+
 
 5. **Tool Use** [FUTURE]
    - `search(query)` tool for debaters during research phase

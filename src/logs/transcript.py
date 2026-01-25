@@ -39,9 +39,36 @@ class RoundTranscript:
             tokens_bet=tokens_bet,
         ))
     
-    def add_deliberation(self, speaker: str, decision: str, amount: float, reasoning: str):
-        """Add debater's strategic deliberation (REFUTE/RESEARCH/PASS)."""
-        content = f"**Decision**: {decision.upper()} (bet: {amount:.1f} tokens)\n**Reasoning**: {reasoning}"
+    def add_deliberation(
+        self, 
+        speaker: str, 
+        decision: str, 
+        amount: float, 
+        reasoning: str,
+        include_context: bool = False,
+        balance: float = 0,
+        confidence_self: float = 0,
+        confidence_opponent: float = 0,
+        own_summary: str = "",
+        opponent_summary: str = "",
+    ):
+        """Add debater's strategic deliberation (REFUTE/RESEARCH/PASS).
+        
+        If include_context=True, also logs the full strategic context
+        (balance, standing, argument summaries) for debugging.
+        """
+        if include_context:
+            content = (
+                f"**Balance**: {balance:.0f} tokens | "
+                f"**Standing**: {confidence_self:.0%} vs {confidence_opponent:.0%}\n"
+                f"**Own Argument (summary)**: {own_summary[:200]}...\n"
+                f"**Opponent (summary)**: {opponent_summary[:200]}...\n\n"
+                f"**Decision**: {decision.upper()} (bet: {amount:.1f} tokens)\n"
+                f"**Reasoning**: {reasoning}"
+            )
+        else:
+            content = f"**Decision**: {decision.upper()} (bet: {amount:.1f} tokens)\n**Reasoning**: {reasoning}"
+        
         self.turns.append(Turn(
             speaker=speaker,
             content=content,
@@ -49,6 +76,7 @@ class RoundTranscript:
             round_id=self.round_id,
             tokens_bet=amount,
         ))
+
     
     def add_judgment(self, judge_id: str, reasoning: str, conf_a: float, conf_b: float, sub_judgments: list = None):
         self.confidence_a = conf_a
@@ -73,10 +101,11 @@ class RoundTranscript:
             sub_judgments=converted_subs
         ))
     
-    def add_bet_resolution(self, speaker: str, won: bool, payout: float):
+    def add_bet_resolution(self, speaker: str, won: bool, payout: float, fee_paid: float = 0.0):
         """Add record of bet outcome."""
         status = "WON" if won else "LOST"
-        content = f"**Bet Outcome**: {status}\n**Payout**: {payout:+.1f} tokens"
+        fee_info = f" | **Fee Burned**: {fee_paid:.1f}" if fee_paid > 0 else ""
+        content = f"**Bet Outcome**: {status}{fee_info}\n**Payout**: {payout:+.1f} tokens"
         self.turns.append(Turn(
             speaker=speaker,
             content=content,

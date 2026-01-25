@@ -1,0 +1,252 @@
+"""
+Observers: Passive analytics components that track debate dynamics.
+
+Observers implement the Observer protocol and are called during dynamic debates.
+They do NOT affect scoring - only observe and report.
+"""
+from dataclasses import dataclass, field
+from typing import Protocol, Optional, List, Dict, Any, TYPE_CHECKING
+import json
+
+if TYPE_CHECKING:
+    from .dynamic_round import DynamicRoundContext
+
+
+@dataclass
+class ObservationReport:
+    """Output from an observer."""
+    observer_name: str
+    metrics: Dict[str, Any] = field(default_factory=dict)
+    narrative: str = ""
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "observer": self.observer_name,
+            "metrics": self.metrics,
+            "narrative": self.narrative,
+        }
+
+
+class Observer(Protocol):
+    """Protocol for debate observers."""
+    
+    @property
+    def name(self) -> str:
+        """Unique name for this observer."""
+        ...
+    
+    def on_iteration(self, ctx: "DynamicRoundContext", iteration: int) -> None:
+        """Called after each betting iteration."""
+        ...
+    
+    def finalize(self, ctx: "DynamicRoundContext") -> ObservationReport:
+        """Called after distribution. Returns final report."""
+        ...
+
+
+class MetricsObserver:
+    """
+    Computes debate metrics without LLM calls.
+    
+    Curated metrics:
+    - efficiency: tokens_awarded / gen_cost (None if 0)
+    - aggression: bet_count / iterations
+    - pass_rate: pass_count / iterations
+    - momentum_shifts: lead changes > 5%
+    - final_lead: winner's confidence margin
+    - elapsed_seconds: total wall-clock time
+    """
+    
+    MOMENTUM_THRESHOLD = 0.05  # 5% change = significant lead shift
+    
+    def __init__(self):
+        self._prev_leader: Optional[str] = None
+        self._momentum_shifts: int = 0
+        self._start_time: float = 0.0  # Will set on first iteration
+        self._timing_started: bool = False
+        self._iteration_times: List[float] = []
+    
+    @property
+    def name(self) -> str:
+        return "MetricsObserver"
+    
+    def on_iteration(self, ctx: "DynamicRoundContext", iteration: int) -> None:
+        """Track momentum shifts and timing during debate."""
+        import time
+        
+        # Start timing on first actual iteration
+        if not self._timing_started:
+            self._start_time = time.time()
+            self._timing_started = True
+        
+        self._iteration_times.append(time.time() - self._start_time)
+        
+        if ctx.current_judgment is None:
+            return
+        
+        conf_a = ctx.current_judgment.confidence_a
+        conf_b = ctx.current_judgment.confidence_b
+        
+        # Determine current leader (with threshold)
+        if conf_a > conf_b + self.MOMENTUM_THRESHOLD:
+            current_leader = "A"
+        elif conf_b > conf_a + self.MOMENTUM_THRESHOLD:
+            current_leader = "B"
+        else:
+            current_leader = "TIE"
+        
+        # Check for lead change
+        if self._prev_leader is not None and current_leader != self._prev_leader:
+            if self._prev_leader != "TIE" and current_leader != "TIE":
+                self._momentum_shifts += 1
+        
+        self._prev_leader = current_leader
+    
+    def finalize(self, ctx: "DynamicRoundContext") -> ObservationReport:
+        """Compute final metrics."""
+        import time
+        iterations = ctx.iterations_completed or 1  # Avoid div by 0
+        
+        # Net change: actual balance change (negative means lost tokens)
+        # This shows TRUE economic performance
+        final_balance_a = ctx.initial_balance_a - ctx.gen_cost_a - ctx.total_bet_amount_a + ctx.tokens_awarded_a
+        final_balance_b = ctx.initial_balance_b - ctx.gen_cost_b - ctx.total_bet_amount_b + ctx.tokens_awarded_b
+        net_change_a = final_balance_a - ctx.initial_balance_a
+        net_change_b = final_balance_b - ctx.initial_balance_b
+        
+        # Total spent: generation cost + bet amounts
+        total_spent_a = ctx.gen_cost_a + ctx.total_bet_amount_a
+        total_spent_b = ctx.gen_cost_b + ctx.total_bet_amount_b
+        
+        # ROI: net_change / total_spent (negative ROI = lost money)
+        roi_a = net_change_a / total_spent_a if total_spent_a > 0 else None
+        roi_b = net_change_b / total_spent_b if total_spent_b > 0 else None
+        
+        # Aggression: bet frequency
+        aggression_a = ctx.bet_count_a / iterations
+        aggression_b = ctx.bet_count_b / iterations
+        
+        # Pass rate
+        pass_rate_a = ctx.pass_count_a / iterations
+        pass_rate_b = ctx.pass_count_b / iterations
+        
+        # Final lead
+        if ctx.current_judgment:
+            final_lead = abs(ctx.current_judgment.confidence_a - ctx.current_judgment.confidence_b)
+            winner = "A" if ctx.current_judgment.confidence_a > ctx.current_judgment.confidence_b else "B"
+        else:
+            final_lead = 0.0
+            winner = "TIE"
+        
+        metrics = {
+            "iterations": iterations,
+            "termination": ctx.termination_reason,
+            "debater_a": {
+                "net_change": round(net_change_a, 1),
+                "roi": round(roi_a, 3) if roi_a is not None else None,
+                "aggression": round(aggression_a, 3),
+                "pass_rate": round(pass_rate_a, 3),
+                "bet_count": ctx.bet_count_a,
+                "gen_cost": ctx.gen_cost_a,
+                "total_bet": ctx.total_bet_amount_a,
+                "tokens_awarded": ctx.tokens_awarded_a,
+            },
+            "debater_b": {
+                "net_change": round(net_change_b, 1),
+                "roi": round(roi_b, 3) if roi_b is not None else None,
+                "aggression": round(aggression_b, 3),
+                "pass_rate": round(pass_rate_b, 3),
+                "bet_count": ctx.bet_count_b,
+                "gen_cost": ctx.gen_cost_b,
+                "total_bet": ctx.total_bet_amount_b,
+                "tokens_awarded": ctx.tokens_awarded_b,
+            },
+            "momentum_shifts": self._momentum_shifts,
+            "final_lead": round(final_lead, 3),
+            "winner": winner,
+            "confidence_trajectory": ctx.confidence_trajectory,
+            "elapsed_seconds": round(time.time() - self._start_time, 1) if self._timing_started else 0,
+            "avg_seconds_per_iter": round((time.time() - self._start_time) / iterations, 1) if self._timing_started else 0,
+        }
+        
+        # Narrative with net change
+        narrative = f"{iterations} iters, {self._momentum_shifts} shifts, A:{net_change_a:+.0f} B:{net_change_b:+.0f}, winner: {winner}"
+        
+        return ObservationReport(
+            observer_name=self.name,
+            metrics=metrics,
+            narrative=narrative,
+        )
+
+
+class ScribeObserver:
+    """
+    LLM-based observer that generates incremental narrative summaries.
+    
+    Uses rolling summarization to keep context bounded:
+    Input = (prev_summary + new_content_this_iteration)
+    Output = updated_summary
+    """
+    
+    def __init__(self, backend=None, debater_a_name: str = "A", debater_b_name: str = "B"):
+        self._backend = backend
+        self._debater_a_name = debater_a_name
+        self._debater_b_name = debater_b_name
+        self._running_summary: str = ""
+        self._iteration_notes: List[str] = []
+    
+    @property
+    def name(self) -> str:
+        return "ScribeObserver"
+    
+    def on_iteration(self, ctx: "DynamicRoundContext", iteration: int) -> None:
+        """Generate incremental summary for this iteration."""
+        if self._backend is None:
+            # No backend, just note the iteration
+            self._iteration_notes.append(f"Iter {iteration}: decisions made")
+            return
+        
+        # Build increment description
+        action_a = ctx.decision_a.bet_type.value if ctx.decision_a else "unknown"
+        action_b = ctx.decision_b.bet_type.value if ctx.decision_b else "unknown"
+        conf_a = ctx.current_judgment.confidence_a if ctx.current_judgment else 0.5
+        conf_b = ctx.current_judgment.confidence_b if ctx.current_judgment else 0.5
+        
+        new_content = f"Iter {iteration}: {self._debater_a_name} chose {action_a}, {self._debater_b_name} chose {action_b}. Scores: {conf_a:.0%} vs {conf_b:.0%}."
+        
+        # Generate incremental summary
+        prompt = f"""You are a debate Scribe. Summarize the debate's evolution.
+
+Previous summary:
+{self._running_summary or "(Debate just started)"}
+
+New development:
+{new_content}
+
+Write 1-2 sentences updating the summary. Focus on strategic shifts, pivots, and momentum changes."""
+        
+        try:
+            result = self._backend.generate(prompt, system="You are a concise analyst.", max_tokens=100)
+            self._running_summary = result.text.strip()
+        except Exception:
+            # Fallback: just append the note
+            self._running_summary += f" {new_content}"
+        
+        self._iteration_notes.append(new_content)
+    
+    def finalize(self, ctx: "DynamicRoundContext") -> ObservationReport:
+        """Return the final narrative."""
+        return ObservationReport(
+            observer_name=self.name,
+            metrics={"iteration_count": len(self._iteration_notes)},
+            narrative=self._running_summary or " | ".join(self._iteration_notes),
+        )
+
+
+def save_observations(reports: List[ObservationReport], path: str) -> None:
+    """Save observation reports to JSON for post-processing."""
+    data = {
+        "observations": [r.to_dict() for r in reports]
+    }
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
