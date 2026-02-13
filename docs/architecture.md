@@ -95,9 +95,9 @@ src/
 │   ├── round.py           # Phase-based single round logic
 │   ├── dynamic_round.py   # Iterative betting until mutual PASS
 │   ├── observers.py       # MetricsObserver, ScribeObserver
-│   └── tournament.py      # Multi-round management
-└── logs/
-    └── transcript.py      # JSON + Markdown transcript export
+│   └── tournament.py      # Multi-round management (using EconomyParams)
+└── tests/
+    └── verify_*.py        # Consolidated verification scripts
 ```
 
 ## Configuration

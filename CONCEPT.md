@@ -2,7 +2,7 @@
 
 ## The Big Idea
 
-Train AI models to develop efficient internal reasoning (ITMC) by placing them in an **adversarial debate tournament with a persistent token economy**.
+Train AI models to develop efficient internal reasoning through **inference-time compute** and **mesa-cognition** by placing them in an adversarial debate tournament with a persistent token economy.
 
 Unlike standard debate training (OpenAI 2018), this system adds:
 - **Economic stakes** that persist across rounds
@@ -10,6 +10,11 @@ Unlike standard debate training (OpenAI 2018), this system adds:
 - **Actual token cost** for generating responses (not abstract chips)
 - **Debt systems** allowing strategic resource allocation
 - **Tiered arenas** for skill-matched competition
+
+## Design Philosophy
+
+**Emergent over Prescribed.** This system aims for *dialectic* reasoning (collaborative truth-seeking) rather than *eristic* debate (winning at any cost). We avoid prescribing what models should think about; instead, economic pressure creates selection for efficient meta-cognition. Prompts are minimal and autonomy-allowing — the model decides what's worth remembering, what strategy to use, and how to reason internally.
+
 
 ## Key Terminology
 
@@ -127,7 +132,7 @@ This allows:
 
 ## LLM-Driven Deliberation
 
-**The betting decision is NOT a heuristic—it is LLM-driven.** Before choosing REFUTE, RESEARCH, or PASS, the debater model explicitly reasons about its strategy. This is where ITMC (Internal Thinking / Mesa-Cognition) happens.
+**The betting decision is NOT a heuristic—it is LLM-driven.** Before choosing REFUTE, RESEARCH, or PASS, the debater model explicitly reasons about its strategy. This is where **inference-time compute** and **mesa-cognition** emerge.
 
 ### Deliberation Prompt Structure
 ```
@@ -175,21 +180,62 @@ AMOUNT: [0-N]
 
 ## Related Work
 
-- **AI Safety via Debate** (OpenAI 2018) - No economy
-- **Constitutional AI** (Anthropic) - Self-critique, no adversary
-- **Futarchy** (Robin Hanson) - "Vote values, bet beliefs"
-- **Multi-Agent Debate** - No persistent state
-- **Thermodynamic analogy** (our discussion) - Tokens = energy, fees = friction
+| Prior Work | Key Distinction |
+|------------|-----------------|
+| **AI Safety via Debate** (Irving et al.) | No economy, no persistent state |
+| **Constitutional AI** (Anthropic) | Self-critique without external adversary |
+| **Futarchy** (Hanson) | Prediction markets for governance, not reasoning |
+| **Multi-Agent Debate** (Du et al.) | No token economy, no betting mechanics |
+| **Chain-of-Thought** (Wei et al.) | No economic pressure on reasoning length |
 
-## Goal: ITMC Optimization
+## Goal: Inference-Time Compute & Mesa-Cognition
 
-ITMC = Internal Thinking / Mesa-Cognition
+**Inference-time compute**: Additional reasoning steps at generation time (chain-of-thought, self-reflection).
+
+**Mesa-cognition**: Internal optimization processes that emerge within the model during training.
 
 We want models to develop:
 - Compressed, reusable reasoning patterns
 - Long-term strategic planning
 - Efficient internal representations
 - Research vs. refutation strategy selection
+
+## Key Innovations (Implemented)
+
+### 1. Chain-of-Thought with `<thinking>` Tags
+
+Debaters can use `<thinking></thinking>` tags for private reasoning before responding:
+- **Extracted before JSON parsing** in deliberation
+- **Hidden from opponent and judge** but logged for mesa-cognition analysis
+- **Still costs tokens** — thinking isn't free
+
+This creates implicit selection pressure for *efficient* internal reasoning.
+
+### 2. Web Search via ResearchTool
+
+Debaters can execute real web searches during the RESEARCH phase:
+```python
+tool = get_research_tool()
+result = tool.search("AI regulation history")
+# Dynamic cost: ~5-20 tokens based on content retrieved
+```
+- Uses **DuckDuckGo** for search
+- **Dynamic token cost** based on query length + content retrieved
+- Search results synthesized into argument via LLM
+
+### 3. Self-Summarization Memory
+
+To prevent context bloat, debaters self-summarize after each content generation:
+- Triggered when argument history > 400 chars
+- Compresses to ~80 words preserving thesis + key evidence
+- **Costs tokens** — memory management is an economic decision
+- Prevents "drift" in long debates while maintaining strategic continuity
+
+### 4. Async Parallel Generation
+
+Initial arguments generated concurrently via `asyncio.gather`:
+- Reduces wall-clock time by ~50%
+- vLLM backend stub prepared for future production scale
 
 ## Architecture: Phase-Based Round Execution
 
@@ -241,6 +287,11 @@ The system now enforces strict contracts at the LLM boundary:
 - ✅ YAML Configuration System — Per-model specs for debaters/judges
 - ✅ Mixed Model Support — Different models for each participant
 - ✅ Ensemble Judging — Multiple judges with weighted averaging
+- ✅ **Tool Use (ResearchTool)** — Web search via DuckDuckGo with dynamic token cost
+- ✅ **Internal Reasoning (`<thinking>` tags)** — Chain-of-thought hidden from judge/opponent
+- ✅ **Self-Summarization Memory** — Bounded context compression for long debates
+- ✅ **Positional Bias Mitigation** — Randomized argument order for judges
+- ✅ **Async Parallel Generation** — Concurrent initial arguments via asyncio
 
 **Roadmap (in priority order):**
 
@@ -250,16 +301,6 @@ The system now enforces strict contracts at the LLM boundary:
 2. **Tiered Arenas** [FUTURE]
    - ELO-like ranking with promotion/relegation
    - Requires question generation system for scale
-
-
-5. **Tool Use** [FUTURE]
-   - `search(query)` tool for debaters during research phase
-   - Tool usage costs tokens, tracked as metric
-
-6. **Internal Reasoning (ITMC Enhancement)** [FUTURE]
-   - Scratchpad/internal monologue hidden from opponent and judge
-   - Still costs tokens (thinking isn't free)
-   - Compare models with/without scratchpad access
 
 7. **Reputation System** [FUTURE]
    - Long-term tracking of debater performance across tournaments

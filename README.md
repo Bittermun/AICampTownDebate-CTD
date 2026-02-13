@@ -1,6 +1,6 @@
 # AICampTownDebate
 
-**Adversarial Token-Economy Debate Training for Internal Reasoning Optimization (ITMC)**
+**Adversarial Token-Economy Debate for Inference-Time Compute & Mesa-Cognition**
 
 ## Quick Summary
 
@@ -10,7 +10,7 @@ AICampTownDebate is a novel AI training paradigm that combines:
 - **Amnesiac Judges**: Small, high-quality models that evaluate arguments without bias accumulation.
 - **Futarchy-Inspired Betting**: Models wager on their own confidence and the quality of their research/refutations.
 
-The ultimate goal is to optimize the **Internal Thinking / Mesa-Cognition (ITMC)** of LLMs through economic selection pressure.
+The ultimate goal is to optimize **inference-time compute** and **mesa-cognition** in LLMs through economic selection pressure.
 
 ## Key Concepts
 
@@ -18,6 +18,9 @@ The ultimate goal is to optimize the **Internal Thinking / Mesa-Cognition (ITMC)
 - **Token (LLM)**: Actual compute cost of generation, deducted from the economic balance.
 - **Strategic Options**: REFUTE (counter opponent), RESEARCH (strengthen own), or PASS (save resources).
 - **Information Asymmetry**: Hiding judge reasoning to prevent models from learning to pander.
+- **`<thinking>` Tags**: Chain-of-thought reasoning hidden from judge but logged for mesa-cognition analysis.
+- **Web Search (ResearchTool)**: Real DuckDuckGo search during RESEARCH phase with dynamic token cost.
+- **Self-Summarization**: Memory management where debaters compress their history (costs tokens).
 
 ## Getting Started
 
@@ -29,20 +32,27 @@ The ultimate goal is to optimize the **Internal Thinking / Mesa-Cognition (ITMC)
    ```
 3. **Run Demo**:
    ```bash
-   python demo_ollama.py
+   python demo_dynamic.py --config configs/tournament_config.yaml
    ```
 
 ## Documentation
 
-- [CONCEPT.md](file:///c:/Users/msunw/Downloads/AIcamptowndebate/CONCEPT.md): The core theory and mechanics.
-- [DEVLOG.md](file:///c:/Users/msunw/Downloads/AIcamptowndebate/DEVLOG.md): Append-only history of development sessions.
-- [architecture.md](file:///c:/Users/msunw/Downloads/AIcamptowndebate/docs/architecture.md): System design and data flow.
-- [CONTRIBUTING.md](file:///c:/Users/msunw/Downloads/AIcamptowndebate/docs/CONTRIBUTING.md): How to add new agents or judges.
+- [CONCEPT.md](./CONCEPT.md): The core theory, mechanics, and key innovations.
+- [DEVLOG.md](./DEVLOG.md): Recent development sessions (archived history in DEVLOG_ARCHIVE.md).
+- [architecture.md](./docs/architecture.md): System design and data flow.
 
 ## Project Status
 
-🟡 **Phase: Foundation** - Setting up project structure, local LLM integration, and token economy dynamics.
+🟢 **Phase: Core Complete** — Dynamic debates with inference-time compute features (thinking tags, web search, self-summarization), modular judges, and full token economy.
+
+**Roadmap:** Ground truth calibration, tiered arenas, reputation system.
+
+## Troubleshooting
+
+- **Validation Failures**: If judges fail to parse JSON, check `ollama logs`. The system now includes a JSON repair mechanism (`_repair_truncated_json`), but extreme truncation may still cause issues. Try increasing `max_tokens` in `JudgeConfig`.
+- **Positional Bias**: If the judge always favors the first debater, ensure `randomize_argument_order: true` is set in your config.
 
 ## License
 
 MIT (or check local license file).
+

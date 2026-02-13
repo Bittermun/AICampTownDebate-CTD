@@ -8,7 +8,7 @@ import sys
 import argparse
 from src.models import Debater, DebaterConfig, Judge, JudgeConfig
 from src.models.ollama_backend import get_backend, OllamaConfig
-from src.arena import DynamicDebateRound, TournamentConfig
+from src.arena import DynamicDebateRound, EconomyParams
 from src.arena.observers import MetricsObserver, save_observations
 from src.economy import TokenLedger, BettingManager, TokenDistributor
 from src.logs import create_transcript
@@ -51,23 +51,23 @@ def main():
     print(f"Debaters: {', '.join(f'{d.name}@{d.model}' for d in tc.debaters)}")
     print(f"Judge: {tc.judges[0].model if tc.judges else 'default'}")
     
-    # Topic for debate
-    topic = tc.rounds.topic
+    # Topic for debate (use first from topics list)
+    topic = tc.rounds.topics[0] if tc.rounds.topics else "Should AI development be regulated?"
     print(f"\nTopic: {topic}")
     print(f"Mode: Dynamic (continues until both debaters PASS)")
     print(f"Max iterations: {tc.rounds.max_iterations}")
     
-    # Config - use economy settings from tournament config
-    config = TournamentConfig(
+    # Economy params - use economy settings from tournament config
+    economy_params = EconomyParams(
         initial_balance=tc.economy.initial_balance,
         max_debt=tc.economy.max_debt,
         tokens_per_round=tc.economy.tokens_per_round,
     )
     
     # Initialize economy
-    ledger = TokenLedger(config.initial_balance, config.max_debt)
-    betting = BettingManager(config.betting_fee, config.min_bet)
-    distributor = TokenDistributor(config.tokens_per_round)
+    ledger = TokenLedger(economy_params.initial_balance, economy_params.max_debt)
+    betting = BettingManager(economy_params.betting_fee, economy_params.min_bet)
+    distributor = TokenDistributor(economy_params.tokens_per_round)
     
     # Create debaters from config
     debater_a = Debater(DebaterConfig(
@@ -139,9 +139,9 @@ def main():
     # Create transcript
     transcript = create_transcript({
         "mode": "dynamic",
-        "initial_balance": config.initial_balance,
-        "max_debt": config.max_debt,
-        "max_iterations": 10,
+        "initial_balance": economy_params.initial_balance,
+        "max_debt": economy_params.max_debt,
+        "max_iterations": tc.rounds.max_iterations,
         "debater_a": debater_a.name,
         "debater_b": debater_b.name,
         "judge": judge.name,
@@ -157,10 +157,10 @@ def main():
             ledger=ledger,
             betting=betting,
             distributor=distributor,
-            max_iterations=10,
+            max_iterations=tc.rounds.max_iterations,
             observers=[metrics_observer],
-            split_pot_enabled=True,      # Enable initial bounty distribution
-            initial_pot_amount=40.0,     # 40 tokens distributed after initial judgment
+            split_pot_enabled=tc.economy.split_pot_enabled,
+            initial_pot_amount=tc.economy.initial_pot_amount,
         )
 
         

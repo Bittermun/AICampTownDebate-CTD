@@ -4,6 +4,76 @@
 
 ---
 
+## 2026-01-28 | Session 19: Critical Bug Fixes + Multi-Dimension Judge
+
+### Problem: "Win by Doing Nothing"
+Tournament 2 revealed Beta won without making a single valid decision—all deliberations failed JSON validation (defaulted to PASS), conserving tokens while Alpha went bankrupt fighting.
+
+### Root Cause Analysis
+| Bug | Impact |
+|-----|--------|
+| Validation failure → free PASS | No penalty for broken JSON |
+| Judge 100%/0% scores | Extreme volatility |
+| Single-dimension scoring | Passivity not penalized |
+
+### Solution: Multi-Dimension Scoring
+Replaced single confidence score with 3 dimensions (research-backed):
+- **Accuracy** (40%) — Factual correctness
+- **Responsiveness** (30%) — Addressed opponent's points
+- **Development** (30%) — Refined argument over time
+
+Passive debaters naturally score low on responsiveness + development.
+
+### Key Decisions
+- **DEC-034**: Multi-dim scoring uses weighted combination, not arbitrary penalties
+- **DEC-035**: Judge confidence clamped to 10-90% range (no extreme volatility)
+- **DEC-036**: Fallback to old format if multi-dim parsing fails (graceful degradation)
+- **DEC-037**: Validation failures still cost tokens (llm_tokens_used preserved)
+
+### Files Created
+- `src/models/judge_prompts.py` - Multi-dimension prompt templates
+- `src/models/response_models.py` - Added `MultiDimensionJudgment` class
+- `verify_fix5_clamping.py`, `verify_fix6_validation_cost.py` - Granular tests
+
+### Files Modified
+- `src/models/judge.py` - Multi-dim evaluate(), _validate_multidim_response()
+- `configs/tournament_config.yaml` - Enabled randomize_argument_order
+
+### Test Results
+```
+Active vs Passive:   65% vs 35% ← Active wins
+Engaged vs Accurate: 61% vs 39% ← Engagement beats static accuracy
+All 6 verification tests: PASS
+```
+
+---
+
+
+## 2026-01-25 | Session 18: Self-Summarization Memory + Mesa-Cognition
+
+### What Happened
+- Replaced 500-char truncation with LLM-generated position summaries
+- Debaters now self-summarize after each content generation
+- **Added `<thinking>` support to `generate_argument()` and `generate_research()`**
+- Thinking is optional ("You may use...") — model decides if worth the tokens
+- Summarization costs tokens (economic constraint on memory use)
+
+### Key Decisions
+- **DEC-029**: Summarization triggered only when history > 400 chars
+- **DEC-030**: Summary capped at 80 words to balance compression vs. context
+- **DEC-031**: Cost charged under "summarization_cost" ledger category
+- **DEC-032**: Validation fallbacks tracked via `[VALIDATION_FAILED]` marker detection
+- **DEC-033**: Thinking prompt is autonomy-allowing, not mandatory
+
+### Files Modified
+- `src/models/debater.py` - Added `thinking` field to `Argument`, thinking extraction logic
+- `src/arena/dynamic_round.py` - Added `summary_a/b` fields, `validation_fallback_a/b` counters
+- `src/arena/observers.py` - Added `validation_fallbacks` to MetricsObserver output
+- `CONCEPT.md` - Added "Design Philosophy" section (emergent over prescribed)
+
+
+---
+
 ## 2026-01-25 | Session 17: Roleless Prompts
 
 ### Changes
@@ -19,11 +89,11 @@
 
 ---
 
-## 2026-01-25 | Session 16: ITMC & Performance Foundation
+## 2026-01-25 | Session 16: Inference-Time Compute & Performance Foundation
 
 ### What Happened
 - **Phase 4 Performance**: Async backend, parallel argument generation
-- **Phase 5 ITMC**: Chain-of-thought `<thinking>` tags for debater deliberation
+- **Phase 5 Inference-Time Compute**: Chain-of-thought `<thinking>` tags for debater deliberation
 
 ### Key Changes
 - `ollama_backend.py` - Added `generate_async()` with aiohttp
@@ -33,7 +103,7 @@
 
 ### Decisions
 - **DEC-024**: Timing tracks from first iteration, not observer creation
-- **DEC-025**: ITMC uses `<thinking>` tags extracted before JSON parsing
+- **DEC-025**: Inference-time compute uses `<thinking>` tags extracted before JSON parsing
 - **DEC-026**: Disabled `json_mode` for deliberation to allow free-form thinking
 
 ---
@@ -162,7 +232,7 @@ Would report 15.0 for three 100-token bets, when actual fees were 5 + 25 + 50 = 
 - `src/arena/dynamic_round.py` - Pass context to deliberation logging
 
 ### Why This Matters
-- Proto-ITMC: This is a stepping stone toward full Internal Thinking logging
+- Proto-ITC: This is a stepping stone toward full Internal Thinking logging
 - Researchers can now see exactly what info the model had when making betting decisions
 - Easy to toggle off later if transcripts become too verbose
 
@@ -228,284 +298,14 @@ Would report 15.0 for three 100-token bets, when actual fees were 5 + 25 + 50 = 
 
 ---
 
+## Earlier Sessions (1-7)
 
-### What Happened
-- Implemented `DynamicDebateRound` class with iterative betting loop
-- Debates now continue until both debaters PASS simultaneously or safety limit (10 iterations)
-- Added pot locking—tokens bet accumulate and distribute only at endgame
-- Added graceful error handling for judge validation failures during iterations
-- Created `demo_dynamic.py` for testing dynamic mode
+*Sessions 1-7 have been archived for context management. See [DEVLOG_ARCHIVE.md](./DEVLOG_ARCHIVE.md) for historical sessions including:*
+- Project initialization and novelty research
+- Ollama integration
+- Token economy pegging
+- LLM-driven deliberation
+- Payout logging and modular judges
+- Robustness improvements (Pydantic)
+- Dynamic round implementation
 
-### Files Modified
-- `src/arena/dynamic_round.py` - [NEW] `DynamicDebateRound`, `DynamicRoundContext`, `DynamicRoundResult`
-- `src/arena/__init__.py` - Export new classes
-- `demo_dynamic.py` - [NEW] Demo script for dynamic mode
-
-### Test Results
-- 9 iterations, terminated on `mutual_pass`
-- 15 total bets placed
-- Winner: Debater_Alpha (114.5 tokens vs 93.2)
-- Judge validation warnings handled gracefully (2 failures during run)
-
----
-
-## 2026-01-16 | Session 6 (Continued): Robustness Improvements
-
-### What Happened
-- **Eliminated parsing failures**: Implemented Pydantic-based structured extraction for all LLM responses.
-  - Added `format: "json"` to Ollama backend for forced JSON output
-  - Created `JudgmentResponse` and `DeliberationResponse` Pydantic models
-  - Replaced regex parsing with `model_validate_json()` + auto-normalization
-- **Fixed private API leakage**: `ConsensusJudge` now uses public `generate_judgment()` method instead of accessing internal `_ollama` and `_parse_response`.
-- **Added resilience to multi-judge systems**: `EnsembleJudge` and `ConsensusJudge` now catch individual sub-judge failures gracefully—one failure doesn't crash the entire ensemble.
-- **Added economy invariant checks**: Token distribution now asserts that awarded tokens equal the pot (prevents silent token leaks).
-- **Decomposed `round.py` god-method**: The 240-line `run()` is now 12 lines orchestrating 5 discrete phase functions.
-
-### Key Decisions
-- **DEC-019**: Validation failures reject the round (no more 0.5/0.5 "Shadow Ties").
-- **DEC-020**: Ensemble judges continue with partial results if some sub-judges fail.
-- **DEC-021**: `RoundContext` dataclass holds all state explicitly, making phase transitions testable.
-
-### Files Modified
-- `src/models/response_models.py` - [NEW] Pydantic models for LLM responses
-- `src/models/ollama_backend.py` - Added `json_mode` parameter
-- `src/models/judge.py` - Added `_validate_response()`, `generate_judgment()`, fixed ConsensusJudge
-- `src/economy/distribution.py` - Added token invariant assertion
-- `src/arena/round.py` - [MAJOR] Full refactor into phase functions
-
-### Architecture Change: Phase Pipeline
-
-```
-run() → RoundContext
-    ├─ _phase_generate_arguments()
-    ├─ _phase_initial_judgment()
-    ├─ _phase_betting()
-    ├─ _phase_final_judgment()
-    └─ _phase_distribute_tokens()
-```
-
----
-
-18: 
-19: ## 2026-01-15 | Session 5: Payouts, Symmetry, and Ensembles
-20: 
-21: ### What Happened
-22: - **Closed the loop on payouts**: Round transcript now explicitly logs WON/LOST status and payout amounts for all bets.
-23: - **Implemented Information Symmetry**: Debaters now see their confidence scores and "Standing" (Leading/Trailing/Tied) during both deliberation and generation phases.
-24: - **Refactored Modular Judges**: Introduced `BaseJudge` interface and multiple judge types (`LLMJudge`, `EnsembleJudge`, `ConsensusJudge`).
-25: - **Implemented Instructor Model**: Consensus judge uses an instructor model to synthesize final judgments from sub-judge notes.
-26: - **Created `JudgeFactory`**: Utility for building complex judge configurations (Consensus vs Ensemble) easily.
-27: 
-28: ### Key Decisions
-29: - **DEC-017**: Information asymmetry is strictly enforced: reasoning stays hidden, but scores are fully transparent to enable strategic pivoting.
-30: - **DEC-018**: Consensus judge uses a multi-turn pattern: sub-judges think independently, then an instructor synthesizes.
-31: 
-32: ### Files Modified
-33: - `src/logs/transcript.py` - Added `add_bet_resolution`, updated Markdown export.
-34: - `src/arena/round.py` - Integrated payout logging and score visibility passing.
-35: - `src/models/debater.py` - Prompt enhancements for score awareness.
-36: - `src/models/judge.py` - Refactored into modular architecture.
-37: - `src/models/judge_factory.py` - [NEW] Factory for modular judges.
-38: - `src/models/__init__.py` - Export new modular judge classes.
-39: 
-40: ---
-
-## PENDING FEATURES (not yet implemented)
-
-User requested these features before next test run:
-
-1. ~~**Track actual LLM token cost** - Deduct from balance based on generation length~~ ✅ DONE
-2. **Hide judge reasoning from debaters** - They see confidence scores only (prevents pandering)
-3. ~~**Rebalance token economy** - Ensure models don't run out of 100 tokens immediately~~ ✅ DONE
-4. **Research option** - Allow debaters to strengthen OWN argument (not just refute opponent)
-5. **Display token return amounts** - Show what bets pay out on win/loss
-
----
-
-## 2026-01-15 | Session 4: LLM-Driven Deliberation
-
-### What Happened
-- Replaced heuristic betting with **LLM-driven deliberation**
-- Debaters now explicitly reason about REFUTE vs RESEARCH vs PASS
-- Added `reasoning` field to `BetDecision` to capture strategic justification
-- Added `_parse_deliberation()` for robust response parsing with fallbacks
-
-### Key Decisions
-- **DEC-014**: Deliberation uses structured prompt with REASONING/DECISION/AMOUNT format
-- **DEC-015**: Debaters see both arguments + balance before deciding strategy
-- **DEC-016**: Stub mode falls back to random heuristic for testing
-
-### Deliberation Prompt Structure
-```
-=== STRATEGIC OPTIONS ===
-1. REFUTE - Counter opponent's argument
-2. RESEARCH - Strengthen your own argument
-3. PASS - Save tokens for future rounds
-
-REASONING: [One sentence explaining your choice]
-DECISION: [REFUTE or RESEARCH or PASS]
-AMOUNT: [0-N]
-```
-
-### Files Modified
-- `src/models/debater.py` - `decide_bet()` now uses LLM, added `_parse_deliberation()`
-
-### Next Steps
-- [ ] Test deliberation with real LLM
-- [ ] Track deliberation reasoning in transcript
-
----
-
-## 2026-01-15 | Session 3: Token Economy Pegging & Token Awareness
-
-### What Happened
-- Implemented 20:1 token economy (20 LLM tokens = 1 economic token)
-- Modified `ollama_backend.py` to return `GenerationResult` with `tokens_used`
-- Added `llm_tokens_used` field to `Argument` dataclass in `debater.py`
-- Integrated token cost deduction into `round.py` for all arguments
-- Updated default starting balance from 100 → 200 tokens
-- **Added token-aware system prompt** - Debaters now see their balance in prompts
-- **Added Research vs Refutation choice** - `BetType` enum, `BetDecision` dataclass
-- Added `generate_research()` method for strengthening own arguments
-
-### Key Decisions
-- **DEC-010**: Use 20:1 ratio (keeps numbers in LLM-friendly range ~50-200)
-- **DEC-011**: Starting balance = 200 (enough for ~4-5 full arguments)
-- **DEC-012**: No base round reward (per user request)
-- **DEC-013**: Research strengthens own argument without seeing opponent's counter
-
-### Files Modified
-- `src/models/ollama_backend.py` - Added `GenerationResult`, returns token count
-- `src/models/debater.py` - Added `BetType`, `BetDecision`, `generate_research`, token-aware prompts
-- `src/models/__init__.py` - Export new types
-- `src/arena/round.py` - Handle Research vs Refutation, deduct costs, pass balance
-- `src/economy/ledger.py` - Default balance 200
-- `config.yaml` - Updated economy section
-- `demo_ollama.py` - Updated config
-
----
-
-## 2026-01-15 | Session 2: Ollama Integration
-
-### What Happened
-- llama-cpp-python build failed (missing Visual Studio build tools)
-- Switched to Ollama backend for simpler deployment
-- Created `ollama_backend.py` with unified API wrapper
-- Refactored `debater.py` and `judge.py` to support stub/Ollama/llama-cpp
-- Created `demo_ollama.py` for Ollama-specific testing
-- Verified stub mode still works
-
-### Key Decisions
-- **DEC-007**: Use Ollama as primary backend (pre-built, no compilation)
-- **DEC-008**: Model path format: "ollama:model_name" (e.g., "ollama:qwen2.5:1.5b")
-- **DEC-009**: Fallback chain: Ollama → stub if unavailable
-
-### Context Verification (from earlier conversation)
-- Core paradigm: Adversarial Token-Economy Debate for ITMC optimization
-- Amnesiac judges prevent bias accumulation
-- Thermodynamic analogy: tokens = energy, debates = work, fees = friction
-- Hardware: Intel Ultra 9, 8GB VRAM, 38GB RAM
-
-### Next Steps
-- [x] Install Ollama ✓
-- [x] Pull test model (qwen2.5:1.5b) ✓
-- [x] Run first real LLM experiment ✓
-- [x] Add debate transcript logging ✓
-- [ ] Tune prompts for better argument generation
-- [ ] Implement truth-focus questions
-
-### EXP-001: First Real LLM Tournament
-- **Model**: qwen2.5:1.5b
-- **Rounds**: 3
-- **Result**: Debater_Alpha won (141.5 vs 127.5 tokens)
-- **Confidence progression**: 0.75 → 0.60 → 0.50 (A)
-- **Observation**: Judge correctly varies confidence based on argument quality
-
-### EXP-002: Transcript Logging Test
-- **Model**: qwen2.5:1.5b
-- **Files created**: `ollama_results_transcript.md`, `ollama_results_transcript.json`
-- **Result**: Debater_Beta won (144.5 vs 142.5 tokens)
-- **Full arguments captured**: 3 rounds × (2 initial + 2 counter + 1 judgment) = 15 turns
-
-### BUG FIX: Judge Re-Evaluation
-- **Problem**: Bets were resolved randomly (50%) instead of based on counter-argument quality
-- **Root cause**: I added a TODO but never implemented it
-- **Fix**: Judge now re-evaluates after counter-arguments; bets win if confidence improved
-- **New tracking**: `initial_judgment` and `final_judgment` in RoundResult
-
-### EXP-003: Re-Evaluation Test
-- **Model**: qwen2.5:1.5b
-- **Result**: Debater_Alpha won (126.5 vs 106.5 tokens)
-- **Verified**: Transcript shows separate "initial" and "final" judgments per round
-
----
-
-## 2026-01-13 | Session 1 (continued): LLM Integration
-
-### What Happened
-- Added `requirements.txt` with llama-cpp-python
-- Created `download_models.py` for fetching GGUF models
-- Integrated llama-cpp-python into `debater.py` and `judge.py`
-- Added JSON parsing fallback for judge responses
-- Verified demo still works in stub mode
-
-### Key Decisions
-- **DEC-004**: Use Q4_K_M quantization for balance of quality/VRAM
-- **DEC-005**: Auto-fallback to stub mode if llama-cpp-python not installed
-- **DEC-006**: Judge response parsing has multiple fallbacks (JSON → regex → default)
-
-### Next Steps
-- [ ] Install llama-cpp-python with GPU support
-- [ ] Download test model (Qwen2-1.5B for quick testing)
-- [ ] Run first real LLM experiment
-- [ ] Tune prompts for better argument generation
-
----
-
-## 2026-01-13 | Session 1: Project Initialization
-
-### What Happened
-- User described novel AI training concept combining debate + token economy + futarchy elements
-- Researched existing approaches (AI Safety via Debate, Constitutional AI, Futarchy, MAD)
-- Determined this combination appears **novel**
-- Assessed hardware constraints (8GB VRAM, 38GB RAM, Intel Ultra 9)
-- Decided on quantized 7B models as best balance
-- Created foundational documentation structure
-
-### Key Decisions
-- **DEC-001**: Use append-only DEVLOG for context persistence
-- **DEC-002**: Target 7B quantized models (4-bit GGUF) for local execution
-- **DEC-003**: Hybrid approach possible (local judges, API debaters)
-
-### Open Questions
-- [ ] Token supply inflation/deflation rules
-- [ ] Debt limit and bankruptcy mechanics
-- [ ] How to implement "truth-focus questions"
-- [ ] Judge confidence → token conversion formula
-
-### Next Steps
-- [ ] Create architecture.md with system design
-- [ ] Scaffold src/ directory structure
-- [ ] Decide on model framework (llama.cpp, ollama, transformers)
-
-### Files Created
-- `README.md`
-- `CONCEPT.md`
-- `DEVLOG.md`
-- `.agent/workflows/resume.md`
-- `docs/architecture.md`
-- `config.yaml`
-- `demo.py`
-- `src/__init__.py`
-- `src/models/debater.py`
-- `src/models/judge.py`
-- `src/models/__init__.py`
-- `src/economy/ledger.py`
-- `src/economy/betting.py`
-- `src/economy/distribution.py`
-- `src/economy/__init__.py`
-- `src/arena/round.py`
-- `src/arena/tournament.py`
-- `src/arena/__init__.py`
-
----

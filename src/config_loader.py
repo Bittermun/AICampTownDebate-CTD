@@ -37,7 +37,8 @@ class EconomyConfig:
 class RoundConfig:
     """Round execution parameters."""
     max_iterations: int = 10
-    topic: str = "Should AI development be regulated by governments?"
+    num_rounds: int = 1
+    topics: List[str] = field(default_factory=lambda: ["Should AI development be regulated by governments?"])
 
 
 @dataclass
@@ -87,9 +88,17 @@ def load_config(path: str) -> TournamentConfig:
     
     # Parse rounds
     round_data = data.get('rounds', {})
+    topics_raw = round_data.get('topics', [])
+    if not topics_raw and round_data.get('topic'):
+        # Support legacy single topic
+        topics_raw = [round_data.get('topic')]
+    if not topics_raw:
+        topics_raw = ["Should AI development be regulated by governments?"]
+    
     rounds = RoundConfig(
         max_iterations=round_data.get('max_iterations', 10),
-        topic=round_data.get('topic', "Should AI development be regulated by governments?"),
+        num_rounds=round_data.get('num_rounds', 1),
+        topics=topics_raw,
     )
     
     # Parse judge configuration

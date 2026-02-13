@@ -59,7 +59,13 @@ class DynamicRoundContext:
     bet_count_b: int = 0
     pass_count_a: int = 0
     pass_count_b: int = 0
+    validation_fallback_a: int = 0  # Count of PASS due to JSON parse failures
+    validation_fallback_b: int = 0
     confidence_trajectory: List[tuple] = field(default_factory=list)  # [(iter, conf_a, conf_b)]
+    
+    # Self-summarization memory (compressed position for each debater)
+    summary_a: str = ""  # Debater A's compressed position summary
+    summary_b: str = ""  # Debater B's compressed position summary
     
     # Termination tracking
     iterations_completed: int = 0
@@ -362,21 +368,13 @@ class DynamicDebateRound:
                 self.ledger.deduct(self.debater_b.name, delib_cost_b, "deliberation_cost", ctx.round_id)
                 ctx.gen_cost_b += delib_cost_b
             
-            # Log deliberations with ITMC thinking to transcript
-            if transcript:
-                transcript.add_deliberation(
-                    speaker=self.debater_a.name,
-                    decision=ctx.decision_a.bet_type.value,
-                    amount=ctx.decision_a.amount,
-                    reasoning=ctx.decision_a.reasoning,
-                )
-                transcript.add_deliberation(
-                    speaker=self.debater_b.name,
-                    decision=ctx.decision_b.bet_type.value,
-                    amount=ctx.decision_b.amount,
-                    reasoning=ctx.decision_b.reasoning,
-                )
+            # Track validation fallbacks (JSON parse failures that forced PASS)
+            if "[VALIDATION_FAILED]" in ctx.decision_a.reasoning:
+                ctx.validation_fallback_a += 1
+            if "[VALIDATION_FAILED]" in ctx.decision_b.reasoning:
+                ctx.validation_fallback_b += 1
             
+            # Log deliberations with inference-time thinking to transcript
             # Update balances after deliberation costs
             balance_a = self.ledger.balance(self.debater_a.name)
             balance_b = self.ledger.balance(self.debater_b.name)
@@ -492,6 +490,7 @@ class DynamicDebateRound:
         decision = ctx.decision_a if is_debater_a else ctx.decision_b
         opponent_combined = ctx.combined_b if is_debater_a else ctx.combined_a
         own_combined = ctx.combined_a if is_debater_a else ctx.combined_b
+        own_summary = ctx.summary_a if is_debater_a else ctx.summary_b  # Use compressed memory
         conf_self = ctx.current_judgment.confidence_a if is_debater_a else ctx.current_judgment.confidence_b
         conf_opponent = ctx.current_judgment.confidence_b if is_debater_a else ctx.current_judgment.confidence_a
         
@@ -522,7 +521,7 @@ class DynamicDebateRound:
             counter = debater.generate_argument(
                 ctx.topic, ctx.round_id,
                 opponent_argument=opponent_combined,
-                own_history=own_combined,  # Pass debater's own history
+                own_history=own_summary or own_combined,  # Use summary if available, else raw
                 current_balance=current_bal,
                 confidence_self=conf_self,
                 confidence_opponent=conf_opponent,
@@ -541,8 +540,21 @@ class DynamicDebateRound:
             # Update combined argument
             if is_debater_a:
                 ctx.combined_a += f"\n\n[COUNTER-ARGUMENT iter={ctx.iteration}]\n{counter.content}"
+                # Self-summarize for next iteration memory
+                summary_result = debater.summarize_position(ctx.combined_a)
+                ctx.summary_a = summary_result.text
+                summary_cost = summary_result.llm_tokens_used // ctx.token_cost_ratio
+                if summary_cost > 0:
+                    self.ledger.deduct(debater.name, summary_cost, "summarization_cost", ctx.round_id)
+                    ctx.gen_cost_a += summary_cost
             else:
                 ctx.combined_b += f"\n\n[COUNTER-ARGUMENT iter={ctx.iteration}]\n{counter.content}"
+                summary_result = debater.summarize_position(ctx.combined_b)
+                ctx.summary_b = summary_result.text
+                summary_cost = summary_result.llm_tokens_used // ctx.token_cost_ratio
+                if summary_cost > 0:
+                    self.ledger.deduct(debater.name, summary_cost, "summarization_cost", ctx.round_id)
+                    ctx.gen_cost_b += summary_cost
             
             if transcript:
                 transcript.add_argument(
@@ -586,8 +598,21 @@ class DynamicDebateRound:
             # Update combined argument with research
             if is_debater_a:
                 ctx.combined_a += f"\n\n[RESEARCH iter={ctx.iteration}]\n{research.content}"
+                # Self-summarize for next iteration memory
+                summary_result = debater.summarize_position(ctx.combined_a)
+                ctx.summary_a = summary_result.text
+                summary_cost = summary_result.llm_tokens_used // ctx.token_cost_ratio
+                if summary_cost > 0:
+                    self.ledger.deduct(debater.name, summary_cost, "summarization_cost", ctx.round_id)
+                    ctx.gen_cost_a += summary_cost
             else:
                 ctx.combined_b += f"\n\n[RESEARCH iter={ctx.iteration}]\n{research.content}"
+                summary_result = debater.summarize_position(ctx.combined_b)
+                ctx.summary_b = summary_result.text
+                summary_cost = summary_result.llm_tokens_used // ctx.token_cost_ratio
+                if summary_cost > 0:
+                    self.ledger.deduct(debater.name, summary_cost, "summarization_cost", ctx.round_id)
+                    ctx.gen_cost_b += summary_cost
             
             if transcript:
                 transcript.add_argument(
@@ -627,16 +652,38 @@ class DynamicDebateRound:
             bets_a = [b for b in ctx.all_bets if b.bettor_id == self.debater_a.name]
             bets_b = [b for b in ctx.all_bets if b.bettor_id == self.debater_b.name]
             
+            # Determine winners
+            won_a = ctx.current_judgment.confidence_a > ctx.initial_judgment.confidence_a
+            won_b = ctx.current_judgment.confidence_b > ctx.initial_judgment.confidence_b
+            
+            # Resolve bets for debater A (award payouts if won)
+            for bet in bets_a:
+                # Multiplier: confidence improvement ratio (min 1.0 to return stake)
+                if won_a and ctx.initial_judgment.confidence_a > 0:
+                    multiplier = ctx.current_judgment.confidence_a / ctx.initial_judgment.confidence_a
+                    multiplier = max(1.0, min(multiplier, 3.0))  # Cap at 3x
+                else:
+                    multiplier = 1.0
+                self.betting.resolve_bet(bet, won_a, multiplier, self.ledger)
+            
+            # Resolve bets for debater B (award payouts if won)
+            for bet in bets_b:
+                if won_b and ctx.initial_judgment.confidence_b > 0:
+                    multiplier = ctx.current_judgment.confidence_b / ctx.initial_judgment.confidence_b
+                    multiplier = max(1.0, min(multiplier, 3.0))  # Cap at 3x
+                else:
+                    multiplier = 1.0
+                self.betting.resolve_bet(bet, won_b, multiplier, self.ledger)
+            
+            # Log to transcript
             if bets_a:
                 total_fee_a = sum(b.fee_paid for b in bets_a)
-                won_a = ctx.current_judgment.confidence_a > ctx.initial_judgment.confidence_a
                 transcript.add_bet_resolution(
                     self.debater_a.name, won_a, dist.tokens_a, fee_paid=total_fee_a
                 )
             
             if bets_b:
                 total_fee_b = sum(b.fee_paid for b in bets_b)
-                won_b = ctx.current_judgment.confidence_b > ctx.initial_judgment.confidence_b
                 transcript.add_bet_resolution(
                     self.debater_b.name, won_b, dist.tokens_b, fee_paid=total_fee_b
                 )

@@ -150,6 +150,7 @@ class MetricsObserver:
                 "gen_cost": ctx.gen_cost_a,
                 "total_bet": ctx.total_bet_amount_a,
                 "tokens_awarded": ctx.tokens_awarded_a,
+                "validation_fallbacks": ctx.validation_fallback_a,
             },
             "debater_b": {
                 "net_change": round(net_change_b, 1),
@@ -160,6 +161,7 @@ class MetricsObserver:
                 "gen_cost": ctx.gen_cost_b,
                 "total_bet": ctx.total_bet_amount_b,
                 "tokens_awarded": ctx.tokens_awarded_b,
+                "validation_fallbacks": ctx.validation_fallback_b,
             },
             "momentum_shifts": self._momentum_shifts,
             "final_lead": round(final_lead, 3),
@@ -177,6 +179,22 @@ class MetricsObserver:
             metrics=metrics,
             narrative=narrative,
         )
+    
+    def save(self, path: str) -> None:
+        """Save accumulated metrics to JSON file.
+        
+        Note: This saves the last finalized report's metrics.
+        Should be called after finalize() has been invoked.
+        """
+        # Build a summary from internal state
+        data = {
+            "observer": self.name,
+            "momentum_shifts": self._momentum_shifts,
+            "timing_started": self._timing_started,
+            "iteration_times": self._iteration_times,
+        }
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2)
 
 
 class ScribeObserver:

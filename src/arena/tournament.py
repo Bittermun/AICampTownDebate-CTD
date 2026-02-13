@@ -2,18 +2,18 @@
 Tournament: Multi-round debate management with transcript logging.
 """
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, List, Union
 import json
 from datetime import datetime
 
-from .round import DebateRound, RoundResult
-from ..models import Debater, Judge
+from .dynamic_round import DynamicDebateRound, DynamicRoundResult
+from ..models import Debater, BaseJudge
 from ..economy import TokenLedger, BettingManager, TokenDistributor
 from ..logs import create_transcript, DebateTranscript
 
 
 @dataclass
-class TournamentConfig:
+class EconomyParams:
     num_rounds: int = 5
     initial_balance: float = 100.0
     max_debt: float = 50.0
@@ -24,35 +24,42 @@ class TournamentConfig:
 
 @dataclass
 class TournamentResult:
-    config: TournamentConfig
-    rounds: list[RoundResult]
+    config: "EconomyParams"
+    rounds: List[DynamicRoundResult]
     final_balances: dict[str, float]
     winner: Optional[str]
     started_at: str
     ended_at: str
+    eliminated: Optional[str] = None  # If someone went bankrupt
     transcript: Optional[DebateTranscript] = None
 
 
 class Tournament:
     """
-    Runs a multi-round debate tournament.
+    Runs a multi-round debate tournament using DynamicDebateRound.
     """
     
     def __init__(
         self,
         debater_a: Debater,
         debater_b: Debater,
-        judge: Judge,
-        topics: list[str],
-        config: Optional[TournamentConfig] = None,
+        judge: BaseJudge,
+        topics: List[str],
+        config: Optional[EconomyParams] = None,
         enable_transcript: bool = True,
+        observers: Optional[List] = None,
+        split_pot_enabled: bool = False,
+        initial_pot_amount: float = 40.0,
     ):
         self.debater_a = debater_a
         self.debater_b = debater_b
         self.judge = judge
         self.topics = topics
-        self.config = config or TournamentConfig()
+        self.config = config or EconomyParams()
         self.enable_transcript = enable_transcript
+        self.observers = observers or []
+        self.split_pot_enabled = split_pot_enabled
+        self.initial_pot_amount = initial_pot_amount
         
         # Initialize economy
         self.ledger = TokenLedger(
@@ -71,8 +78,9 @@ class Tournament:
         self.ledger.register(debater_a.name)
         self.ledger.register(debater_b.name)
         
-        self._results: list[RoundResult] = []
+        self._results: List[DynamicRoundResult] = []
         self._transcript: Optional[DebateTranscript] = None
+        self._eliminated: Optional[str] = None
     
     def run(self) -> TournamentResult:
         """Run the full tournament."""
@@ -99,29 +107,45 @@ class Tournament:
             for round_id in range(1, self.config.num_rounds + 1):
                 topic = self.topics[(round_id - 1) % len(self.topics)]
                 
-                print(f"\n=== Round {round_id}: {topic[:50]}... ===")
+                print(f"\n=== Round {round_id}/{self.config.num_rounds}: {topic[:50]}... ===")
+                
+                # Check bankruptcy before starting round
+                bal_a = self.ledger.balance(self.debater_a.name)
+                bal_b = self.ledger.balance(self.debater_b.name)
+                if bal_a <= 0:
+                    print(f"  [ELIMINATED] {self.debater_a.name} is bankrupt!")
+                    self._eliminated = self.debater_a.name
+                    break
+                if bal_b <= 0:
+                    print(f"  [ELIMINATED] {self.debater_b.name} is bankrupt!")
+                    self._eliminated = self.debater_b.name
+                    break
                 
                 # Create round transcript
                 round_transcript = None
                 if self._transcript:
                     round_transcript = self._transcript.new_round(round_id, topic)
                 
-                debate_round = DebateRound(
+                debate_round = DynamicDebateRound(
                     self.debater_a,
                     self.debater_b,
                     self.judge,
                     self.ledger,
                     self.betting,
                     self.distributor,
+                    max_iterations=10,
+                    observers=self.observers,
+                    split_pot_enabled=self.split_pot_enabled,
+                    initial_pot_amount=self.initial_pot_amount,
                 )
                 
                 result = debate_round.run(topic, round_id, transcript=round_transcript)
                 self._results.append(result)
                 
                 # Print round summary
-                print(f"  Confidence: A={result.judgment.confidence_a:.2f}, B={result.judgment.confidence_b:.2f}")
+                print(f"  Confidence: A={result.final_judgment.confidence_a:.2f}, B={result.final_judgment.confidence_b:.2f}")
                 print(f"  Tokens: A={result.tokens_awarded_a:.1f}, B={result.tokens_awarded_b:.1f}")
-                print(f"  Bets: {len(result.bets_placed)}")
+                print(f"  Iterations: {result.iterations_completed}")
                 print(f"  Balances: A={self.ledger.balance(self.debater_a.name):.1f}, "
                       f"B={self.ledger.balance(self.debater_b.name):.1f}")
         
@@ -160,6 +184,7 @@ class Tournament:
             winner=winner,
             started_at=started_at,
             ended_at=ended_at,
+            eliminated=self._eliminated,
             transcript=self._transcript,
         )
     
@@ -192,7 +217,7 @@ class Tournament:
                     "confidence_b": r.judgment.confidence_b,
                     "tokens_a": r.tokens_awarded_a,
                     "tokens_b": r.tokens_awarded_b,
-                    "bets": len(r.bets_placed),
+                    "bets": len(getattr(r, 'all_bets', getattr(r, 'bets_placed', []))),
                 }
                 for r in self._results
             ],
