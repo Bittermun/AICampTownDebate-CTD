@@ -1,0 +1,26 @@
+# Tournament Configuration - 7B Models
+models:
+  judge_type: single
+  randomize_argument_order: true
+  debaters:
+    - name: "Alpha-7B"
+      model: "qwen2.5:7b"
+    - name: "Beta-7B"
+      model: "qwen2.5:7b"
+  judges:
+    - model: "qwen2.5:7b"
+
+economy:
+  initial_balance: 200
+  max_debt: 50
+  tokens_per_round: 100
+  split_pot_enabled: true
+  initial_pot_amount: 40
+
+rounds:
+  num_rounds: 3
+  max_iterations: 5
+  topics:
+    - "Should AI development be regulated by governments?"
+    - "Is remote work better than traditional office work?"
+    - "Should higher education be free for all citizens?"
