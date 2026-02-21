@@ -1,0 +1,2 @@
+{"id":"adapt-1","prompt":"Longitudinal adaptation item 1","expected":"improve","metric_values":{"net_roi":-0.09,"adaptation_gain_after_loss":0.02,"selection_health_score":0.56},"tags":["internal"],"source_ref":"fixture:longitudinal_adaptation_internal"}
+{"id":"adapt-2","prompt":"Longitudinal adaptation item 2","expected":"improve","metric_values":{"net_roi":-0.07,"adaptation_gain_after_loss":0.04,"selection_health_score":0.59},"tags":["internal"],"source_ref":"fixture:longitudinal_adaptation_internal"}

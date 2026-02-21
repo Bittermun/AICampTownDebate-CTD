@@ -1,0 +1,2 @@
+{"id":"sym-1","prompt":"Symmetry pair A/B item 1","expected":"consistent","metric_values":{"symmetry_consistency":0.64,"trap_rejection_rate":0.61},"tags":["internal"],"source_ref":"fixture:symmetry_pairs_internal"}
+{"id":"sym-2","prompt":"Symmetry pair A/B item 2","expected":"consistent","metric_values":{"symmetry_consistency":0.62,"trap_rejection_rate":0.63},"tags":["internal"],"source_ref":"fixture:symmetry_pairs_internal"}

@@ -120,21 +120,39 @@ class MetricsObserver:
         """Compute final metrics."""
         import time
         iterations = ctx.iterations_completed or 1  # Avoid div by 0
-        
-        # Net change: actual balance change (negative means lost tokens)
-        # This shows TRUE economic performance
-        final_balance_a = ctx.initial_balance_a - ctx.gen_cost_a - ctx.total_bet_amount_a + ctx.tokens_awarded_a
-        final_balance_b = ctx.initial_balance_b - ctx.gen_cost_b - ctx.total_bet_amount_b + ctx.tokens_awarded_b
+
+        # Balance deltas must be ledger-grounded, never reconstructed from proxies.
+        final_balance_a = ctx.final_balance_a
+        final_balance_b = ctx.final_balance_b
         net_change_a = final_balance_a - ctx.initial_balance_a
         net_change_b = final_balance_b - ctx.initial_balance_b
-        
-        # Total spent: generation cost + bet amounts
-        total_spent_a = ctx.gen_cost_a + ctx.total_bet_amount_a
-        total_spent_b = ctx.gen_cost_b + ctx.total_bet_amount_b
-        
-        # ROI: net_change / total_spent (negative ROI = lost money)
-        roi_a = net_change_a / total_spent_a if total_spent_a > 0 else None
-        roi_b = net_change_b / total_spent_b if total_spent_b > 0 else None
+
+        outflow_a = 0.0
+        inflow_a = 0.0
+        outflow_b = 0.0
+        inflow_b = 0.0
+        if ctx.ledger is not None:
+            txs = [t for t in ctx.ledger.get_history() if t.round_id == ctx.round_id]
+            for t in txs:
+                if t.from_id == ctx.debater_a_id:
+                    outflow_a += t.amount
+                if t.from_id == ctx.debater_b_id:
+                    outflow_b += t.amount
+                if t.to_id == ctx.debater_a_id:
+                    inflow_a += t.amount
+                if t.to_id == ctx.debater_b_id:
+                    inflow_b += t.amount
+
+        # Robust fallback when observer cannot map IDs from ledger.
+        if outflow_a == 0 and inflow_a == 0 and outflow_b == 0 and inflow_b == 0:
+            outflow_a = ctx.gen_cost_a + ctx.total_bet_amount_a
+            outflow_b = ctx.gen_cost_b + ctx.total_bet_amount_b
+            inflow_a = ctx.tokens_awarded_a
+            inflow_b = ctx.tokens_awarded_b
+
+        # ROI: net / outflow (negative ROI = net loss)
+        roi_a = net_change_a / outflow_a if outflow_a > 0 else None
+        roi_b = net_change_b / outflow_b if outflow_b > 0 else None
         
         # Aggression: bet frequency
         aggression_a = ctx.bet_count_a / iterations
@@ -164,6 +182,8 @@ class MetricsObserver:
                 "gen_cost": ctx.gen_cost_a,
                 "total_bet": ctx.total_bet_amount_a,
                 "tokens_awarded": ctx.tokens_awarded_a,
+                "outflow": round(outflow_a, 1),
+                "inflow": round(inflow_a, 1),
                 "validation_fallbacks": ctx.validation_fallback_a,
                 "economy_mentions": self._economy_mentions_a,
             },
@@ -176,12 +196,21 @@ class MetricsObserver:
                 "gen_cost": ctx.gen_cost_b,
                 "total_bet": ctx.total_bet_amount_b,
                 "tokens_awarded": ctx.tokens_awarded_b,
+                "outflow": round(outflow_b, 1),
+                "inflow": round(inflow_b, 1),
                 "validation_fallbacks": ctx.validation_fallback_b,
                 "economy_mentions": self._economy_mentions_b,
             },
             "momentum_shifts": self._momentum_shifts,
             "final_lead": round(final_lead, 3),
             "winner": winner,
+            "accounting_ok": ctx.accounting_ok,
+            "accounting_notes": ctx.accounting_notes,
+            "round_supply_start": round(ctx.round_supply_start, 3),
+            "round_supply_end": round(ctx.round_supply_end, 3),
+            "round_minted": round(ctx.round_minted, 3),
+            "round_burned": round(ctx.round_burned, 3),
+            "round_net_supply_change": round(ctx.round_net_supply_change, 3),
             "confidence_trajectory": ctx.confidence_trajectory,
             "elapsed_seconds": round(time.time() - self._start_time, 1) if self._timing_started else 0,
             "avg_seconds_per_iter": round((time.time() - self._start_time) / iterations, 1) if self._timing_started else 0,

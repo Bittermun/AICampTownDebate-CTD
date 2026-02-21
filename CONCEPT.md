@@ -2,309 +2,135 @@
 
 ## The Big Idea
 
-Train AI models to develop efficient internal reasoning through **inference-time compute** and **mesa-cognition** by placing them in an adversarial debate tournament with a persistent token economy.
+This project is an experimental environment for selecting better reasoning behavior under scarcity.
 
-Unlike standard debate training (OpenAI 2018), this system adds:
-- **Economic stakes** that persist across rounds
-- **Betting mechanics** where models wager on their arguments
-- **Actual token cost** for generating responses (not abstract chips)
-- **Debt systems** allowing strategic resource allocation
-- **Tiered arenas** for skill-matched competition
+Two debaters argue across many rounds. Every meaningful action consumes tokens. Better judged arguments earn tokens. The system is meant to test whether economic pressure produces:
+- better allocation of inference-time compute,
+- more adaptive strategic behavior over time,
+- and more compressed internal reasoning traces.
+
+## Theoretical Framing
+
+This project intentionally mirrors ideas from economics, evolution, and thermodynamics.
+
+### Economics
+- Tokens are a scarce budget.
+- Decisions are investment choices under uncertainty.
+- Fee structure creates negative EV for uninformed betting and rewards edge-aware behavior.
+- Kelly-style sizing provides a normative baseline for proportional risk-taking.
+
+### Evolution
+- Tournament persistence creates selection pressure over policies, not just one-shot outputs.
+- Agents that allocate compute better should survive longer and accumulate more balance.
+- Pass/respond behavior, budget control, and adaptation after loss become selection signals.
+
+### Thermodynamics (Analogy)
+- Tokens are available energy for cognitive work.
+- Generation/deliberation/search are work-like expenditures.
+- Fees are friction (dissipation) that penalizes random action.
+- Balance depletion and bankruptcy represent irreversible loss of usable budget.
+
+The analogy is descriptive, not a physical claim, but it provides useful invariants:
+- no free work,
+- explicit energy accounting,
+- and path-dependent survival dynamics.
 
 ## Design Philosophy
 
-**Emergent over Prescribed.** This system aims for *dialectic* reasoning (collaborative truth-seeking) rather than *eristic* debate (winning at any cost). We avoid prescribing what models should think about; instead, economic pressure creates selection for efficient meta-cognition. Prompts are minimal and autonomy-allowing — the model decides what's worth remembering, what strategy to use, and how to reason internally.
+Emergent over prescribed.
 
+The project prefers improving environment incentives and evaluation quality over hardcoded behavior rules. If behavior is degenerate, first ask whether the judge/economy signal is too noisy or gameable, instead of adding arbitrary penalties.
 
-## Key Terminology
+## Current Decision Model
 
-| Term | Definition |
-|------|------------|
-| **Debater** | Model that generates arguments on a topic |
-| **Judge** | Modular system (single LLM, Ensemble, or Consensus/Instructor) |
-| **Token (economic)** | Currency earned from good arguments, spent on responses |
-| **Token (LLM)** | Actual compute cost of generating words (~2-3 per word) |
-| **Bet** | Tokens staked on counter-arguments or research |
-| **Research** | Spending tokens to strengthen your OWN position (not refutation) |
-| **Refutation** | Counter-argument attacking opponent's position |
-| **Debt** | Negative token balance; creates efficiency pressure |
-| **Arena Tier** | Skill level; models move up/down based on performance |
-| **Fee** | Token cost for betting; prevents degenerate strategies |
-| **Truth-Focus Question** | Verification question to catch mutual lying |
+Debater deliberation outputs a structured decision:
+- `RESPOND`: place a bet, optionally use search (`use_search: true`), then generate a response.
+- `PASS`: skip action this iteration.
 
-## Round Flow (Revised)
+Each deliberation also includes:
+- `amount`: stake size,
+- `max_budget`: maximum authorized economic tokens for the upcoming generation.
 
-```
+`max_budget` is converted into a hard generation token cap (`max_tokens`) in runtime.
+
+## Round Flow (Current)
+
+```text
 Round N:
-1. Debaters receive topic (they DO NOT see each other's prior arguments)
-2. Each generates initial argument (costs LLM tokens from balance)
-3. Judge evaluates → awards economic tokens based on confidence
-4. Debaters see CONFIDENCE SCORES but NOT judge's reasoning (prevents pandering)
-5. Each debater chooses:
-   - BET on REFUTATION (counter opponent's argument)
-   - BET on RESEARCH (strengthen own argument without seeing opponent)
-   - PASS (save tokens)
-6. If betting: spend tokens on additional generation
-7. Judge re-evaluates → bets resolved based on confidence change
-8. **Payouts Logged**: WON/LOST status and final tokens added to transcript
-9. Balances persist to Round N+1
+1. Generate initial arguments (cost deducted by LLM token usage).
+2. Judge initial arguments and output confidences.
+3. Optional initial bounty split (`split_pot_enabled`).
+4. Iterative loop:
+   - each debater chooses RESPOND or PASS (with wallet budget authorization),
+   - deliberation cost is deducted,
+   - RESPOND may call search and then generate under `max_budget`,
+   - judge re-evaluates.
+5. Terminate on mutual PASS, bankruptcy condition, or max iterations.
+6. Distribute pot by final confidence, resolve bets, log transcript and ledger.
 ```
-
-## Token Economy Rules (To Be Refined)
-
-**Core economics:**
-- Initial balance: 200 tokens
-- Cost per response: ~proportional to LLM tokens used (20:1 ratio)
-- **Deliberation cost**: Debaters pay for betting decisions (thinking isn't free)
-- Award per round: Pot split based on final confidence
-- **Scaling Fee (Dynamic Rounds)**: 5% per iteration (Burned), capped at 50%
-- Bet multiplier on win: Stake returned via Pot Split weight
-
-**Split Pot (Initial Bounty):**
-- Optional `split_pot_enabled` distributes a fixed bounty (default 40 tokens) after initial arguments
-- Guarantees both debaters earn something before betting begins
-- Reduces "all-or-nothing" gambling behavior
-
-**Key constraint:** Award rate should exceed average generation cost, so models accumulate tokens over time if they argue efficiently. Verbosity is punished.
 
 ## Information Asymmetry
 
-| What Debaters See | What Debaters DON'T See |
-|-------------------|-------------------------|
-| Topic | Judge's reasoning |
-| Opponent's arguments (after initial) | Judge's identity/prompt |
-| Confidence scores & Standing (Lead/Trail) | Other debater's token balance |
-| Own balance and debt | Future topics |
+Debaters see:
+- topic,
+- arguments,
+- confidence scores,
+- own balance and balance delta.
 
-**Rationale:** Hiding judge reasoning prevents debaters from learning to pander to specific phrasings. They must learn what *actually* constitutes a good argument.
+Debaters do not see:
+- judge internal reasoning prompt,
+- opponent private `<thinking>`,
+- opponent balance.
 
+This is intended to reduce direct judge-pandering and preserve strategic uncertainty.
 
-## Research vs. Refutation
+## Economy Mechanics (Current)
 
-Debaters can choose TWO types of betting:
+- LLM token usage maps to economic cost through `token_cost_ratio` (default 20:1).
+- Deliberation, generation, summarization, and search all consume budget.
+- Iteration fee scales as `min(0.05 * iteration, 0.50)`.
+- Pot split is confidence-proportional (`tokens_per_round + locked_bets`).
+- Optional split-pot initial bounty gives early non-zero payout.
+- EV guard can conservatively override pathological bets in low-edge states.
 
-| Type | What it does | When to use |
-|------|--------------|-------------|
-| **Refutation** | Generate counter-argument to opponent | When opponent's argument has clear weaknesses |
-| **Research** | Generate additional support for YOUR argument | When you're confident in your position but want to strengthen it |
+## Architecture
 
-This allows models to develop different strategies beyond pure adversarial attack.
+Core runtime path:
+- `src/arena/dynamic_round.py` for iterative round execution.
+- `src/models/debater.py` for deliberation, wallet budget, and generation.
+- `src/models/judge.py` for single/ensemble/consensus judging.
+- `src/economy/*` for ledger, bets, and distribution.
+- `src/logs/transcript.py` and `src/analysis/*` for evidence artifacts.
 
-## Modular Multi-Agent Judging
+## System Contracts
 
-Evaluation is no longer limited to a single model. The system supports:
-- **LLMJudge**: Standard single-model evaluation.
-- **EnsembleJudge**: Aggregates scores from multiple models (majority/mean).
-- **Consensus/Instructor Judge**: A council of sub-judges provides notes to a "Senior Instructor" model which synthesizes the final reasoning and score.
+Structured validation at LLM boundary:
+- `JudgmentResponse`: validates confidences in `[0,1]`, normalizes to sum 1.0.
+- `DeliberationResponse`: validates `decision in {RESPOND, PASS}`, `amount >= 0`, `max_budget >= 0`.
 
-## Configuration System
+Validation failures do not silently become tie judgments.
 
-Tournament parameters are defined via YAML configuration files:
+## Implemented Capabilities
 
-```yaml
-models:
-  debaters:
-    - name: "Alpha"
-      model: "qwen2.5:7b"
-    - name: "Beta"
-      model: "llama3:8b"
-  judges:
-    - model: "qwen2.5:1.5b"
-      weight: 1.0
+- Dynamic rounds with mutual-pass termination.
+- Wallet phase (`max_budget`) threaded into generation hard cap.
+- Deliberation token cost accounting.
+- Optional search tool usage with explicit token cost.
+- Self-summarization memory with explicit token cost.
+- Multi-dimension judging and randomized argument order support.
+- Strict runtime preflight and judge variance gating in tournament runs.
+- Selection health dashboard and trajectory parsing tooling.
 
-economy:
-  initial_balance: 200
-  split_pot_enabled: true
-  initial_pot_amount: 40
+## Known Gaps and Risks
 
-rounds:
-  max_iterations: 10
-  topic: "Should AI be regulated?"
-```
+- Reasoning-quality trajectory metrics exist but need stronger longitudinal validation.
+- Judge quality still determines whether economic signal is learnable or noisy.
+- Some docs/configs can drift quickly as economics are tuned.
+- Debt and elimination semantics need single-source clarity across prompt text and runtime checks.
 
-**Usage:** `python demo_dynamic.py --config configs/tournament_config.yaml`
+## Roadmap
 
-This allows:
-- Different models for each debater (asymmetric capability testing)
-- Ensemble judges with weighted averaging
-- Per-experiment economy tuning
-
-
-## LLM-Driven Deliberation
-
-**The betting decision is NOT a heuristic—it is LLM-driven.** Before choosing REFUTE, RESEARCH, or PASS, the debater model explicitly reasons about its strategy. This is where **inference-time compute** and **mesa-cognition** emerge.
-
-### Deliberation Prompt Structure
-```
-=== YOUR SITUATION ===
-Your balance: {balance} tokens
-Your argument: [summary]
-Opponent's argument: [summary]
-
-=== STRATEGIC OPTIONS ===
-1. REFUTE - Counter opponent's argument
-2. RESEARCH - Strengthen your own argument
-3. PASS - Save tokens for future rounds
-
-REASONING: [One sentence explaining your choice]
-DECISION: [REFUTE or RESEARCH or PASS]
-AMOUNT: [0-N]
-```
-
-### Why This Matters
-- The debater must **explicitly justify** its strategy
-- Reasoning is captured in the transcript for analysis
-- Creates selection pressure for *strategic planning*, not just generation
-- Enables future fine-tuning on high-quality deliberation traces
-
-## Why This Might Work
-
-1. **Token scarcity → efficient reasoning** (can't brute-force)
-2. **Actual token cost → compressed language** (verbosity is expensive)
-3. **Debt pressure → no lazy strategies**
-4. **Betting → skin in the game**
-5. **Amnesiac judges → harder to exploit consistently**
-6. **Hidden judge reasoning → no pandering optimization**
-7. **Long-term persistence → develops planning/strategy**
-8. **LLM-driven deliberation → explicit strategic reasoning**
-
-## Known Concerns
-
-| Concern | Mitigation |
-|---------|------------|
-| Desperation gambling (debt spiral) | Bankruptcy/reset mechanics (TBD) |
-| Collusion between debaters | Truth-focus questions, adversarial auditors |
-| Reward hacking | Multi-judge, betting fees as friction |
-| Opacity of internal reasoning | Future: interpretability hooks |
-| Running out of tokens too fast | Award rate > average cost; tune ratio |
-
-## Related Work
-
-| Prior Work | Key Distinction |
-|------------|-----------------|
-| **AI Safety via Debate** (Irving et al.) | No economy, no persistent state |
-| **Constitutional AI** (Anthropic) | Self-critique without external adversary |
-| **Futarchy** (Hanson) | Prediction markets for governance, not reasoning |
-| **Multi-Agent Debate** (Du et al.) | No token economy, no betting mechanics |
-| **Chain-of-Thought** (Wei et al.) | No economic pressure on reasoning length |
-
-## Goal: Inference-Time Compute & Mesa-Cognition
-
-**Inference-time compute**: Additional reasoning steps at generation time (chain-of-thought, self-reflection).
-
-**Mesa-cognition**: Internal optimization processes that emerge within the model during training.
-
-We want models to develop:
-- Compressed, reusable reasoning patterns
-- Long-term strategic planning
-- Efficient internal representations
-- Research vs. refutation strategy selection
-
-## Key Innovations (Implemented)
-
-### 1. Chain-of-Thought with `<thinking>` Tags
-
-Debaters can use `<thinking></thinking>` tags for private reasoning before responding:
-- **Extracted before JSON parsing** in deliberation
-- **Hidden from opponent and judge** but logged for mesa-cognition analysis
-- **Still costs tokens** — thinking isn't free
-
-This creates implicit selection pressure for *efficient* internal reasoning.
-
-### 2. Web Search via ResearchTool
-
-Debaters can execute real web searches during the RESEARCH phase:
-```python
-tool = get_research_tool()
-result = tool.search("AI regulation history")
-# Dynamic cost: ~5-20 tokens based on content retrieved
-```
-- Uses **DuckDuckGo** for search
-- **Dynamic token cost** based on query length + content retrieved
-- Search results synthesized into argument via LLM
-
-### 3. Self-Summarization Memory
-
-To prevent context bloat, debaters self-summarize after each content generation:
-- Triggered when argument history > 400 chars
-- Compresses to ~80 words preserving thesis + key evidence
-- **Costs tokens** — memory management is an economic decision
-- Prevents "drift" in long debates while maintaining strategic continuity
-
-### 4. Async Parallel Generation
-
-Initial arguments generated concurrently via `asyncio.gather`:
-- Reduces wall-clock time by ~50%
-- vLLM backend stub prepared for future production scale
-
-## Architecture: Phase-Based Round Execution
-
-Each debate round now executes as a **pipeline of discrete phases**, each with explicit inputs and outputs:
-
-```
-RoundContext (state container)
-    │
-    ├─ Phase 1: Generate Arguments
-    │     └─ Debaters generate initial arguments, costs deducted
-    │
-    ├─ Phase 2: Initial Judgment  
-    │     └─ Amnesiac judge evaluates, confidence scores recorded
-    │
-    ├─ Phase 3: Betting
-    │     └─ LLM-driven deliberation → REFUTE / RESEARCH / PASS
-    │
-    ├─ Phase 4: Final Judgment
-    │     └─ Re-evaluate with counter-arguments/research included
-    │
-    └─ Phase 5: Token Distribution
-          └─ Pot split via confidence ratio, bet outcomes logged
-```
-
-This design allows new phases (e.g., Truth-Focus questions) to be inserted without modifying existing logic.
-
-## System Contracts (Implemented)
-
-The system now enforces strict contracts at the LLM boundary:
-
-| Contract | Purpose |
-|----------|---------|
-| `JudgmentResponse` | Validates confidence_a, confidence_b ∈ [0,1], auto-normalizes to sum=1.0 |
-| `DeliberationResponse` | Validates decision ∈ {REFUTE, RESEARCH, PASS}, amount ≥ 0 |
-
-**Validation failures reject the round** rather than defaulting to 0.5/0.5, eliminating "Shadow Ties" that biased the economy.
-
-## Future Evolution
-
-**Implemented:**
-- ✅ Contract-Based Models (Pydantic) — Structured extraction for LLM responses
-- ✅ Phase-Based Round Architecture — Decomposed into discrete, testable phases
-- ✅ Protocol Interfaces — Explicit contracts for backends/judges
-- ✅ Phase Invariant Assertions — Postcondition checks in round phases
-- ✅ Dynamic Round Duration — Debates continue until mutual PASS
-- ✅ Observational Models — MetricsObserver and ScribeObserver for analytics
-- ✅ Split Pot / Initial Bounty — Configurable early payout after initial judgment
-- ✅ Deliberation Token Costs — Debaters pay for "thinking" LLM calls
-- ✅ YAML Configuration System — Per-model specs for debaters/judges
-- ✅ Mixed Model Support — Different models for each participant
-- ✅ Ensemble Judging — Multiple judges with weighted averaging
-- ✅ **Tool Use (ResearchTool)** — Web search via DuckDuckGo with dynamic token cost
-- ✅ **Internal Reasoning (`<thinking>` tags)** — Chain-of-thought hidden from judge/opponent
-- ✅ **Self-Summarization Memory** — Bounded context compression for long debates
-- ✅ **Positional Bias Mitigation** — Randomized argument order for judges
-- ✅ **Async Parallel Generation** — Concurrent initial arguments via asyncio
-
-**Roadmap (in priority order):**
-
-1. **Ground Truth Calibration** [FUTURE]
-   - Factual topics where correctness can be verified post-debate
-
-2. **Tiered Arenas** [FUTURE]
-   - ELO-like ranking with promotion/relegation
-   - Requires question generation system for scale
-
-7. **Reputation System** [FUTURE]
-   - Long-term tracking of debater performance across tournaments
-
-8. **Bankruptcy Mechanics** [FUTURE]
-   - What happens when a debater hits the debt limit?
-
+1. Ground-truth calibration topics for judge validity checks.
+2. Stronger trajectory metrics for internal reasoning compression/synthesis over time.
+3. Economic parameter derivation from explicit runway targets, not ad hoc constants.
+4. Arena progression (tiering/ranking) only after evidence quality stabilizes.

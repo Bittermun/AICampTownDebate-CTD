@@ -15,7 +15,7 @@ from src.models.judge import LLMJudge, JudgeConfig, EnsembleJudge, ConsensusJudg
 from src.arena.tournament import Tournament, EconomyParams
 from src.arena.observers import MetricsObserver
 from src.runtime import normalize_model_path, run_preflight, print_preflight
-from src.analysis import evaluate_judge_variance
+from src.analysis import evaluate_judge_variance, evaluate_judge_calibration
 
 
 def main():
@@ -45,6 +45,12 @@ def main():
     parser.add_argument("--variance-runs", type=int, default=10)
     parser.add_argument("--max-judge-stdev", type=float, default=0.05)
     parser.add_argument("--min-judge-mean-a", type=float, default=0.55)
+    parser.add_argument(
+        "--gate-judge-calibration",
+        action="store_true",
+        help="Run fixed-case calibration gate before tournament and abort on failure",
+    )
+    parser.add_argument("--min-calibration-pass-rate", type=float, default=0.67)
     args = parser.parse_args()
     
     # Load configuration
@@ -82,6 +88,7 @@ def main():
     debater_a = Debater(DebaterConfig(
         model_path=normalize_model_path(cfg.debaters[0].model),
         name=f"Debater_{cfg.debaters[0].name}",
+        strict_runtime=not args.allow_stub,
         system_prompt=cfg.debaters[0].system_prompt,
         ev_guard_enabled=cfg.debaters[0].ev_guard_enabled,
         ev_guard_min_ev=cfg.debaters[0].ev_guard_min_ev,
@@ -92,6 +99,7 @@ def main():
     debater_b = Debater(DebaterConfig(
         model_path=normalize_model_path(cfg.debaters[1].model),
         name=f"Debater_{cfg.debaters[1].name}",
+        strict_runtime=not args.allow_stub,
         system_prompt=cfg.debaters[1].system_prompt,
         ev_guard_enabled=cfg.debaters[1].ev_guard_enabled,
         ev_guard_min_ev=cfg.debaters[1].ev_guard_min_ev,
@@ -108,12 +116,14 @@ def main():
                 model_path=normalize_model_path(j_spec.model),
                 name=j_spec.name or f"Judge_{i}",
                 randomize_argument_order=cfg.randomize_argument_order,
+                strict_runtime=not args.allow_stub,
             )))
         instructor_model = cfg.instructor_model or cfg.judges[0].model
         instructor = LLMJudge(JudgeConfig(
             model_path=normalize_model_path(instructor_model),
             name="Lead_Instructor",
             randomize_argument_order=cfg.randomize_argument_order,
+            strict_runtime=not args.allow_stub,
         ))
         judge = ConsensusJudge(sub_judges, instructor, name="Consensus_Judge")
         judge_config = JudgeConfig(model_path=normalize_model_path(instructor_model), name="Lead_Instructor")
@@ -124,6 +134,7 @@ def main():
                 model_path=normalize_model_path(j_spec.model),
                 name=j_spec.name or f"Judge_{i}",
                 randomize_argument_order=cfg.randomize_argument_order,
+                strict_runtime=not args.allow_stub,
             )))
         judge = EnsembleJudge(sub_judges, name="Ensemble_Judge")
         judge_config = JudgeConfig(model_path=normalize_model_path(cfg.judges[0].model), name="Judge_1")
@@ -132,6 +143,7 @@ def main():
             model_path=normalize_model_path(cfg.judges[0].model),
             name=cfg.judges[0].name or "Judge_Main",
             randomize_argument_order=cfg.randomize_argument_order,
+            strict_runtime=not args.allow_stub,
         )
         judge = LLMJudge(config=judge_config)
 
@@ -141,6 +153,7 @@ def main():
             model_path=judge_config.model_path,
             name=f"{judge_config.name}_gate",
             randomize_argument_order=False,  # Disable shuffling for repeatability gate
+            strict_runtime=not args.allow_stub,
         )
         gate_judge = LLMJudge(config=gate_config)
         gate_judge.load_model()
@@ -168,6 +181,32 @@ def main():
         )
         if not gate.passed:
             print("Aborting tournament: judge variance gate failed.")
+            return
+
+    if args.gate_judge_calibration:
+        print("\nRunning judge calibration gate...")
+        cal_config = JudgeConfig(
+            model_path=judge_config.model_path,
+            name=f"{judge_config.name}_calibration",
+            randomize_argument_order=False,
+            strict_runtime=not args.allow_stub,
+        )
+        cal_judge = LLMJudge(config=cal_config)
+        cal_judge.load_model()
+        try:
+            cal = evaluate_judge_calibration(
+                judge=cal_judge,
+                pass_threshold=args.min_calibration_pass_rate,
+                round_id=1000,
+            )
+        finally:
+            cal_judge.unload_model()
+        print(
+            f"Judge calibration: pass={cal.passed} "
+            f"pass_rate={cal.pass_rate:.3f} threshold={cal.pass_threshold:.3f}"
+        )
+        if not cal.passed:
+            print("Aborting tournament: judge calibration gate failed.")
             return
     
     # Create observer

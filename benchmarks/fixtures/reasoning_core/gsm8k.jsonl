@@ -1,0 +1,2 @@
+{"id":"gsm8k-1","prompt":"Sample GSM8K item 1","expected":"42","metric_values":{"task_accuracy":0.58,"evidence_grounding":0.60},"tags":["external_proxy"],"source_ref":"fixture:gsm8k"}
+{"id":"gsm8k-2","prompt":"Sample GSM8K item 2","expected":"17","metric_values":{"task_accuracy":0.61,"evidence_grounding":0.58},"tags":["external_proxy"],"source_ref":"fixture:gsm8k"}

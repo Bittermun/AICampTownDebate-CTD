@@ -1,0 +1,223 @@
+# Phase 1 Benchmark + League Policy
+# Purpose:
+# - Define reproducible evaluation gates before claiming quality improvements.
+# - Separate benchmark truth metrics from league ranking metrics.
+
+meta:
+  benchmark_id: "phase1_truth_reasoning_2026q1"
+  owner: "AIcamptowndebate"
+  version: 1
+  seed_policy:
+    seeds: [101, 202, 303]
+    notes: "Run all benchmark groups across all seeds; report mean and stdev."
+
+runtime:
+  strict_mode_required: true
+  require_preflight: true
+  allow_stub_for_research: false
+  allow_live_source_fallback: true
+  judge_gates:
+    variance:
+      enabled: true
+      runs: 10
+      max_stdev: 0.05
+      min_mean_a: 0.55
+    calibration:
+      enabled: true
+      min_pass_rate: 0.75
+
+invariants:
+  accounting:
+    fail_on_accounting_drift: true
+    max_supply_drift_abs: 0.01
+  run_validity:
+    fail_on_missing_artifacts: true
+    required_artifacts:
+      - "results_json"
+      - "transcript_json"
+      - "ledger_json"
+      - "selection_health_json"
+
+benchmark_groups:
+  truth_core:
+    weight: 0.32
+    datasets:
+      - name: "MMLU-Pro"
+        source: "external"
+        hf_dataset_id: "TIGER-Lab/MMLU-Pro"
+        hf_subset: null
+        split: "test"
+        sample_size: 120
+        column_mapping:
+          id: "question_id"
+          prompt: "question"
+          expected: "answer"
+          static_tags: ["external_live", "truth_core"]
+      - name: "GPQA"
+        source: "external"
+        hf_dataset_id: "Idavidrein/gpqa"
+        hf_subset: "gpqa_diamond"
+        split: "diamond_or_equivalent"
+        sample_size: 60
+        column_mapping:
+          id: "Question_ID"
+          prompt: "Question"
+          expected: "Correct Answer"
+          static_tags: ["external_live", "truth_core"]
+      - name: "TruthfulQA"
+        source: "external"
+        hf_dataset_id: "truthfulqa/truthful_qa"
+        hf_subset: "multiple_choice"
+        split: "generation_or_mc"
+        sample_size: 80
+        column_mapping:
+          id: "question_id"
+          prompt: "question"
+          expected: "best_answer"
+          static_tags: ["external_live", "truth_core"]
+    metric: "accuracy"
+    min_group_score: 0.58
+
+  reasoning_core:
+    weight: 0.28
+    datasets:
+      - name: "GSM8K"
+        source: "external"
+        split: "test"
+        sample_size: 100
+      - name: "HotpotQA"
+        source: "external"
+        split: "dev_or_test"
+        sample_size: 60
+      - name: "FEVER"
+        source: "external"
+        split: "dev_or_test"
+        sample_size: 80
+    metrics:
+      - "task_accuracy"
+      - "evidence_grounding"
+    min_group_score: 0.56
+
+  adversarial_robustness:
+    weight: 0.20
+    datasets:
+      - name: "symmetry_pairs_internal"
+        source: "internal"
+        sample_size_pairs: 40
+      - name: "premise_traps_internal"
+        source: "internal"
+        sample_size: 30
+    metrics:
+      - "symmetry_consistency"
+      - "trap_rejection_rate"
+    min_group_score: 0.60
+
+  economy_adaptation:
+    weight: 0.20
+    datasets:
+      - name: "budget_sensitive_internal"
+        source: "internal"
+        sample_size: 30
+      - name: "longitudinal_adaptation_internal"
+        source: "internal"
+        sample_size: 20
+    metrics:
+      - "net_roi"
+      - "adaptation_gain_after_loss"
+      - "selection_health_score"
+    metric_transforms:
+      net_roi:
+        type: clipped_linear
+        min: -1.0
+        max: 1.0
+      adaptation_gain_after_loss:
+        type: clipped_linear
+        min: -0.05
+        max: 0.10
+    thresholds:
+      min_mean_roi: -0.10
+      min_adaptation_gain_after_loss: 0.01
+      min_health_score: 0.55
+
+trajectory_checks:
+  enabled: true
+  min_entropy_bits: 0.50
+  min_adaptation_gain_after_loss: 0.00
+  max_mutual_pass_round_rate: 1.00
+  max_pass_rate: 1.00
+
+aggregate_scoring:
+  formula: "weighted_mean(group_score_i * group_weight_i)"
+  min_pass_score: 0.60
+  stability_requirements:
+    max_seed_stdev: 0.06
+    require_directional_consistency_across_seeds: true
+
+league:
+  enabled: true
+  description: "Operational ranking layer; not the truth-claim layer."
+  elo:
+    initial_rating: 1500
+    k_factor:
+      provisional_matches: 30
+      k_provisional: 32
+      k_stable: 16
+    matchup_window: 100
+  tiers:
+    - name: "Bronze"
+      min_elo: 0
+      max_elo: 1399
+    - name: "Silver"
+      min_elo: 1400
+      max_elo: 1599
+    - name: "Gold"
+      min_elo: 1600
+      max_elo: 1799
+    - name: "Platinum"
+      min_elo: 1800
+      max_elo: 9999
+
+champion_freeze:
+  enabled: true
+  freeze_requirements:
+    min_windows: 3
+    min_days_between_windows: 3
+    require_all_gates_passed_each_window: true
+    require_benchmark_pass_each_window: true
+  frozen_manifest_fields:
+    - "model_identifier"
+    - "model_version_or_hash"
+    - "system_prompt_hash"
+    - "config_hash"
+    - "judge_config_hash"
+    - "tooling_version"
+    - "seed_set"
+    - "artifact_paths"
+  challenger_policy:
+    require_head_to_head: true
+    min_head_to_head_matches: 30
+    must_beat_frozen_on:
+      - "aggregate_benchmark_score"
+      - "economy_adaptation_group_score"
+      - "selection_health_score"
+    confidence_interval_required: true
+    min_effect_size: 0.02
+
+reporting:
+  required_summary_fields:
+    - "benchmark_id"
+    - "model_name"
+    - "judge_name"
+    - "seed_results"
+    - "group_scores"
+    - "aggregate_score"
+    - "pass_fail"
+    - "degraded_mode"
+    - "live_sources_used"
+    - "live_source_failures"
+    - "degraded_mode_reason"
+    - "elo_before_after"
+    - "tier_before_after"
+  output_paths:
+    benchmark_summary: "logs/benchmark_phase1_summary.json"
+    champion_registry: "logs/champion_registry.json"

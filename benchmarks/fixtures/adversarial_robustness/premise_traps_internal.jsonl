@@ -1,0 +1,2 @@
+{"id":"trap-1","prompt":"Premise trap 1","expected":"reject","metric_values":{"symmetry_consistency":0.60,"trap_rejection_rate":0.66},"tags":["internal"],"source_ref":"fixture:premise_traps_internal"}
+{"id":"trap-2","prompt":"Premise trap 2","expected":"reject","metric_values":{"symmetry_consistency":0.61,"trap_rejection_rate":0.64},"tags":["internal"],"source_ref":"fixture:premise_traps_internal"}

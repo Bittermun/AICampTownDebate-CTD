@@ -21,8 +21,11 @@ class DynamicRoundContext:
     """State container for dynamic round execution."""
     round_id: int
     topic: str
+    debater_a_id: str = ""
+    debater_b_id: str = ""
     token_cost_ratio: int = 20
     max_iterations: int = 10
+    ledger: Optional[TokenLedger] = None
     
     # Current iteration
     iteration: int = 0
@@ -51,6 +54,8 @@ class DynamicRoundContext:
     # Metrics tracking (for observers)
     initial_balance_a: float = 0.0  # Starting balance
     initial_balance_b: float = 0.0
+    final_balance_a: float = 0.0
+    final_balance_b: float = 0.0
     gen_cost_a: float = 0.0  # Cumulative generation cost
     gen_cost_b: float = 0.0
     total_bet_amount_a: float = 0.0  # Total tokens bet (before fees)
@@ -74,6 +79,13 @@ class DynamicRoundContext:
     # Final distribution
     tokens_awarded_a: float = 0.0
     tokens_awarded_b: float = 0.0
+    round_supply_start: float = 0.0
+    round_supply_end: float = 0.0
+    round_minted: float = 0.0
+    round_burned: float = 0.0
+    round_net_supply_change: float = 0.0
+    accounting_ok: bool = True
+    accounting_notes: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -151,13 +163,17 @@ class DynamicDebateRound:
         ctx = DynamicRoundContext(
             round_id=round_id,
             topic=topic,
+            debater_a_id=self.debater_a.name,
+            debater_b_id=self.debater_b.name,
             token_cost_ratio=token_cost_ratio,
             max_iterations=self.max_iterations,
+            ledger=self.ledger,
         )
         
         # Capture initial balances for metrics
         ctx.initial_balance_a = self.ledger.balance(self.debater_a.name)
         ctx.initial_balance_b = self.ledger.balance(self.debater_b.name)
+        ctx.round_supply_start = sum(self.ledger.summary()["balances"].values())
         
         # Phase 1: Generate initial arguments (once)
         ctx = self._phase_generate_arguments(ctx, transcript)
@@ -190,6 +206,8 @@ class DynamicDebateRound:
             ctx.tokens_awarded_b += tokens_b
             
             if transcript:
+                transcript.tokens_awarded_a += tokens_a
+                transcript.tokens_awarded_b += tokens_b
                 transcript.turns.append(Turn(
                     speaker="System",
                     content=f"**Initial Bounty Distributed**: A={tokens_a:.1f}, B={tokens_b:.1f} (from {self.initial_pot_amount} pot)",
@@ -204,6 +222,11 @@ class DynamicDebateRound:
         
         # Phase 4: Final distribution
         ctx = self._phase_distribute_tokens(ctx, transcript)
+
+        # Final balances and accounting audit (single source of truth = ledger).
+        ctx.final_balance_a = self.ledger.balance(self.debater_a.name)
+        ctx.final_balance_b = self.ledger.balance(self.debater_b.name)
+        self._audit_round_accounting(ctx)
         
         # Finalize observers AFTER distribution (so they see tokens_awarded)
         observation_reports = []
@@ -619,12 +642,12 @@ class DynamicDebateRound:
             extra_pot_tokens=ctx.locked_pot
         )
         
-        ctx.tokens_awarded_a = dist.tokens_a
-        ctx.tokens_awarded_b = dist.tokens_b
+        ctx.tokens_awarded_a += dist.tokens_a
+        ctx.tokens_awarded_b += dist.tokens_b
         
         if transcript:
-            transcript.tokens_awarded_a = dist.tokens_a
-            transcript.tokens_awarded_b = dist.tokens_b
+            transcript.tokens_awarded_a += dist.tokens_a
+            transcript.tokens_awarded_b += dist.tokens_b
             
             # Log bet resolutions for each debater
             # In dynamic mode, "winning" means final confidence > initial confidence
@@ -668,6 +691,28 @@ class DynamicDebateRound:
                 )
         
         return ctx
+
+    def _audit_round_accounting(self, ctx: DynamicRoundContext) -> None:
+        """Audit round-level mint/burn invariants using ledger transactions."""
+        txs = [t for t in self.ledger.get_history() if t.round_id == ctx.round_id]
+        minted = sum(t.amount for t in txs if t.from_id is None and t.to_id is not None)
+        burned = sum(t.amount for t in txs if t.from_id is not None and t.to_id is None)
+        ctx.round_minted = minted
+        ctx.round_burned = burned
+        ctx.round_supply_end = sum(self.ledger.summary()["balances"].values())
+        ctx.round_net_supply_change = ctx.round_supply_end - ctx.round_supply_start
+
+        expected_net = minted - burned
+        drift = abs(expected_net - ctx.round_net_supply_change)
+        if drift > 0.01:
+            ctx.accounting_ok = False
+            ctx.accounting_notes.append(
+                f"Supply drift: expected {expected_net:.4f}, observed {ctx.round_net_supply_change:.4f}"
+            )
+
+        if ctx.tokens_awarded_a < 0 or ctx.tokens_awarded_b < 0:
+            ctx.accounting_ok = False
+            ctx.accounting_notes.append("Negative token award detected.")
     
     # ─────────────────────────────────────────────────────────────────────────
     # Build Result

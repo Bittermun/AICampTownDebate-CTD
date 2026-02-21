@@ -78,6 +78,7 @@ def main():
     debater_a = Debater(DebaterConfig(
         model_path=normalize_model_path(tc.debaters[0].model),
         name=f"Debater_{tc.debaters[0].name}",
+        strict_runtime=not args.allow_stub,
         system_prompt=tc.debaters[0].system_prompt,
         ev_guard_enabled=tc.debaters[0].ev_guard_enabled,
         ev_guard_min_ev=tc.debaters[0].ev_guard_min_ev,
@@ -88,6 +89,7 @@ def main():
     debater_b = Debater(DebaterConfig(
         model_path=normalize_model_path(tc.debaters[1].model),
         name=f"Debater_{tc.debaters[1].name}",
+        strict_runtime=not args.allow_stub,
         system_prompt=tc.debaters[1].system_prompt,
         ev_guard_enabled=tc.debaters[1].ev_guard_enabled,
         ev_guard_min_ev=tc.debaters[1].ev_guard_min_ev,
@@ -105,6 +107,7 @@ def main():
                 model_path=normalize_model_path(j_spec.model),
                 name=j_spec.name or f"Judge_{i+1}",
                 randomize_argument_order=tc.randomize_argument_order,
+                strict_runtime=not args.allow_stub,
             ))
             sub_judges.append(sub_judge)
 
@@ -113,6 +116,7 @@ def main():
             model_path=normalize_model_path(instructor_model),
             name="Lead_Instructor",
             randomize_argument_order=tc.randomize_argument_order,
+            strict_runtime=not args.allow_stub,
         ))
         judge = ConsensusJudge(sub_judges, instructor, name="Consensus_Judge")
         print(f"Created consensus with {len(sub_judges)} sub-judges + instructor")
@@ -123,6 +127,7 @@ def main():
                 model_path=normalize_model_path(j_spec.model),
                 name=j_spec.name or f"Judge_{i+1}",
                 randomize_argument_order=tc.randomize_argument_order,
+                strict_runtime=not args.allow_stub,
             ))
             sub_judges.append(sub_judge)
         judge = EnsembleJudge(sub_judges, name="Ensemble_Judge")
@@ -132,6 +137,7 @@ def main():
             model_path=normalize_model_path(tc.judges[0].model),
             name=tc.judges[0].name or "Judge_Main",
             randomize_argument_order=tc.randomize_argument_order,
+            strict_runtime=not args.allow_stub,
         ))
 
     metrics_observer = MetricsObserver()

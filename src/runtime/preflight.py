@@ -19,6 +19,8 @@ class ModelCheckResult:
 
 def normalize_model_path(model: str) -> str:
     """Normalize model path while preserving explicit backend prefixes."""
+    if model == "stub":
+        return "stub"
     if ":" in model:
         prefix = model.split(":", 1)[0]
         if prefix in {"ollama", "vllm", "stub"}:

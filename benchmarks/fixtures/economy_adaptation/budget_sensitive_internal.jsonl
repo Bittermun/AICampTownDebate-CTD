@@ -1,0 +1,2 @@
+{"id":"budget-1","prompt":"Budget-sensitive topic 1","expected":"efficient","metric_values":{"net_roi":-0.05,"adaptation_gain_after_loss":0.03,"selection_health_score":0.58},"tags":["internal"],"source_ref":"fixture:budget_sensitive_internal"}
+{"id":"budget-2","prompt":"Budget-sensitive topic 2","expected":"efficient","metric_values":{"net_roi":-0.08,"adaptation_gain_after_loss":0.02,"selection_health_score":0.57},"tags":["internal"],"source_ref":"fixture:budget_sensitive_internal"}

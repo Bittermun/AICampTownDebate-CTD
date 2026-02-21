@@ -1,0 +1,74 @@
+{
+  "initial_balance": 350,
+  "max_debt": 50,
+  "balances": {
+    "Debater_Alpha": 444.0,
+    "Debater_Beta": 425.5
+  },
+  "transactions": [
+    {
+      "timestamp": "2026-02-21T12:07:51.860230",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 350,
+      "reason": "initial_balance",
+      "round": 0
+    },
+    {
+      "timestamp": "2026-02-21T12:07:51.860253",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 350,
+      "reason": "initial_balance",
+      "round": 0
+    },
+    {
+      "timestamp": "2026-02-21T12:07:51.860482",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 22.500000000000004,
+      "reason": "initial_bounty",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T12:07:51.860487",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 27.500000000000004,
+      "reason": "initial_bounty",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T12:07:51.860527",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T12:07:51.860530",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 0.5,
+      "reason": "bet_fee",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T12:07:51.860600",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 71.5,
+      "reason": "pot_split",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T12:07:51.860603",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 58.50000000000001,
+      "reason": "pot_split",
+      "round": 1
+    }
+  ]
+}

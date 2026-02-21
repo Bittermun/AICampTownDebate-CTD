@@ -1,0 +1,22 @@
+{
+  "config": {
+    "num_rounds": 1,
+    "initial_balance": 350,
+    "max_debt": 50
+  },
+  "rounds": [
+    {
+      "round_id": 1,
+      "topic": "Does increasing the number of parameters always improve an LLM's factual accuracy?",
+      "confidence_a": 0.55,
+      "confidence_b": 0.45000000000000007,
+      "tokens_a": 94.0,
+      "tokens_b": 86.00000000000001,
+      "bets": 1
+    }
+  ],
+  "final_balances": {
+    "Debater_Alpha": 444.0,
+    "Debater_Beta": 425.5
+  }
+}

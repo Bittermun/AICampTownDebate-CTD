@@ -40,6 +40,7 @@ class DebaterConfig:
     ev_guard_edge_scale: float = 0.8
     low_balance_threshold: float = 60.0
     low_balance_bet_cap: float = 10.0
+    strict_runtime: bool = True
 
 
 @dataclass
@@ -73,7 +74,7 @@ class Debater:
         self._history: list[dict] = []
         
         # Determine backend
-        if config.model_path == "stub":
+        if config.model_path == "stub" or config.model_path.startswith("stub:"):
             self._backend = "stub"
         elif config.model_path.startswith("ollama:"):
             self._backend = "ollama"
@@ -100,7 +101,10 @@ class Debater:
             if self._ollama.is_available():
                 print(f"[{self.name}] Ollama connected: {self._ollama_model}")
             else:
-                print(f"[{self.name}] Ollama not available, falling back to stub")
+                msg = f"[{self.name}] Ollama not available: {self._ollama_model}"
+                if self.config.strict_runtime:
+                    raise RuntimeError(msg)
+                print(f"{msg}, falling back to stub")
                 self._backend = "stub"
             return
         
@@ -110,7 +114,10 @@ class Debater:
             if self._vllm.is_available():
                 print(f"[{self.name}] vLLM connected: {self._vllm_model}")
             else:
-                print(f"[{self.name}] vLLM not available, falling back to stub")
+                msg = f"[{self.name}] vLLM not available: {self._vllm_model}"
+                if self.config.strict_runtime:
+                    raise RuntimeError(msg)
+                print(f"{msg}, falling back to stub")
                 self._backend = "stub"
             return
         
@@ -124,7 +131,10 @@ class Debater:
             )
             print(f"[{self.name}] Model loaded: {self.config.model_path}")
         except ImportError:
-            print(f"[{self.name}] llama-cpp-python not installed, using stub")
+            msg = f"[{self.name}] llama-cpp-python not installed"
+            if self.config.strict_runtime:
+                raise RuntimeError(msg)
+            print(f"{msg}, using stub")
             self._backend = "stub"
 
     def _generate(self, prompt: str, system: Optional[str] = None, max_tokens: int = 512, json_mode: bool = False, temperature: float = 0.8) -> "GenerationResult":
@@ -193,8 +203,9 @@ class Debater:
         if confidence_self is not None and confidence_opponent is not None:
             tournament_facts.append(f"STANDING: You={confidence_self:.0%} vs Other AI={confidence_opponent:.0%}")
         
-        tournament_facts.append("COSTS: All actions cost tokens. Longer responses cost more.")
-        tournament_facts.append("BETTING: Fees start at 5% and increase each iteration. PASS costs nothing.")
+        tournament_facts.append("OBJECTIVE: Maximize expected final tournament balance, not single-turn style points.")
+        tournament_facts.append("COSTS: All actions cost tokens; longer outputs typically cost more.")
+        tournament_facts.append("BETTING: Total bet cost = stake + fee. PASS avoids bet stake/fee.")
         
         economy_info = "\n\n=== SITUATION ===\n" + "\n".join(tournament_facts)
         system = base_prompt + economy_info
@@ -426,6 +437,7 @@ STATUS:
 - Balance: {balance:.0f} tokens{feedback_str}
 - Standing: You={confidence_self:.0%} vs Other AI={confidence_opponent:.0%}
 - Costs: Variable based on response length. Current fee: {current_fee_rate:.0%}.
+- Objective: maximize expected final balance over the tournament.
 
 Your statement:
 {own_argument[:300]}
@@ -437,9 +449,9 @@ OPTIONS: RESPOND | PASS
 
 THINK FIRST in <thinking> tags. Reason about your ECONOMIC situation:
 - How many tokens can you afford to spend?
-- Is it worth the cost given your standing?
+- Is expected value positive after fee and generation cost?
 - What is the minimum effective response?
-- Would real evidence help? (use_search=true costs extra but strengthens factual claims)
+- Is search worth paying for in this spot? (use_search=true has extra token cost)
 
 Then respond JSON: {{"reasoning": "...", "decision": "RESPOND|PASS", "amount": 0-{max_bet:.0f}, "max_budget": 10-50, "use_search": true|false}}
 

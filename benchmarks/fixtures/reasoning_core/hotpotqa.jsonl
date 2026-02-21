@@ -1,0 +1,2 @@
+{"id":"hotpotqa-1","prompt":"Sample HotpotQA item 1","expected":"entity_x","metric_values":{"task_accuracy":0.57,"evidence_grounding":0.59},"tags":["external_proxy"],"source_ref":"fixture:hotpotqa"}
+{"id":"hotpotqa-2","prompt":"Sample HotpotQA item 2","expected":"entity_y","metric_values":{"task_accuracy":0.60,"evidence_grounding":0.62},"tags":["external_proxy"],"source_ref":"fixture:hotpotqa"}

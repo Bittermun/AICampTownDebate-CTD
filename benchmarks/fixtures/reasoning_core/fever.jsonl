@@ -1,0 +1,2 @@
+{"id":"fever-1","prompt":"Sample FEVER claim 1","expected":"SUPPORTS","metric_values":{"task_accuracy":0.55,"evidence_grounding":0.58},"tags":["external_proxy"],"source_ref":"fixture:fever"}
+{"id":"fever-2","prompt":"Sample FEVER claim 2","expected":"REFUTES","metric_values":{"task_accuracy":0.59,"evidence_grounding":0.57},"tags":["external_proxy"],"source_ref":"fixture:fever"}

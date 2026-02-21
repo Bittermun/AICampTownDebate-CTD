@@ -105,12 +105,31 @@ def compute_selection_health(
     bankrupt_agents = [d for d in debaters if final_balances.get(d, 0.0) <= 0.0]
     bankruptcy_rate = (len(bankrupt_agents) / len(debaters)) if debaters else 0.0
 
-    # Approximate survival runway: if not bankrupt, survived full tournament.
+    # Survival runway from ledger when available, fallback to final-balance approximation.
+    survival_runway_observed = float(rounds_total)
     if debaters:
-        survival_rounds = [rounds_total if d not in bankrupt_agents else rounds_total for d in debaters]
-        survival_runway_observed = mean(survival_rounds)
-    else:
-        survival_runway_observed = float(rounds_total)
+        survival_rounds: List[int] = []
+        txs = (ledger or {}).get("transactions", []) if isinstance(ledger, dict) else []
+        initial_balance = float((ledger or {}).get("initial_balance", 0.0)) if isinstance(ledger, dict) else 0.0
+        if txs and initial_balance > 0:
+            txs_sorted = sorted(txs, key=lambda t: (int(t.get("round", 0)), t.get("timestamp", "")))
+            for d in debaters:
+                bal = initial_balance
+                eliminated_round: Optional[int] = None
+                for t in txs_sorted:
+                    amt = float(t.get("amount", 0.0))
+                    if t.get("from") == d:
+                        bal -= amt
+                    if t.get("to") == d:
+                        bal += amt
+                    if bal <= 0 and eliminated_round is None:
+                        eliminated_round = int(t.get("round", rounds_total))
+                survival_rounds.append(eliminated_round if eliminated_round is not None else rounds_total)
+        else:
+            for d in debaters:
+                survival_rounds.append(rounds_total if d not in bankrupt_agents else max(1, rounds_total - 1))
+
+        survival_runway_observed = mean(survival_rounds) if survival_rounds else float(rounds_total)
 
     total_decisions = 0
     total_pass = 0
@@ -226,4 +245,3 @@ def compute_selection_health(
         economy_reasoning_rate=economy_reasoning_rate,
         health_score=health_score,
     )
-

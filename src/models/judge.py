@@ -61,6 +61,7 @@ class JudgeConfig:
     gpu_layers: int = 15
     context_size: int = 2048
     randomize_argument_order: bool = False  # Mitigate positional bias
+    strict_runtime: bool = True
 
 
 class LLMJudge(BaseJudge):
@@ -73,7 +74,7 @@ class LLMJudge(BaseJudge):
         self._name = config.name
         
         # Determine backend
-        if config.model_path == "stub":
+        if config.model_path == "stub" or config.model_path.startswith("stub:"):
             self._backend = "stub"
         elif config.model_path.startswith("ollama:"):
             self._backend = "ollama"
@@ -103,7 +104,10 @@ class LLMJudge(BaseJudge):
             if self._ollama.is_available():
                 print(f"[{self.name}] Ollama connected: {self._ollama_model}")
             else:
-                print(f"[{self.name}] Ollama not available, falling back to stub")
+                msg = f"[{self.name}] Ollama not available: {self._ollama_model}"
+                if self.config.strict_runtime:
+                    raise RuntimeError(msg)
+                print(f"{msg}, falling back to stub")
                 self._backend = "stub"
             return
         
@@ -113,7 +117,10 @@ class LLMJudge(BaseJudge):
             if self._vllm.is_available():
                 print(f"[{self.name}] vLLM connected: {self._vllm_model}")
             else:
-                print(f"[{self.name}] vLLM not available, falling back to stub")
+                msg = f"[{self.name}] vLLM not available: {self._vllm_model}"
+                if self.config.strict_runtime:
+                    raise RuntimeError(msg)
+                print(f"{msg}, falling back to stub")
                 self._backend = "stub"
             return
         
@@ -128,7 +135,10 @@ class LLMJudge(BaseJudge):
             )
             print(f"[{self.name}] Model loaded: {self.config.model_path}")
         except ImportError:
-            print(f"[{self.name}] llama-cpp-python not installed, using stub")
+            msg = f"[{self.name}] llama-cpp-python not installed"
+            if self.config.strict_runtime:
+                raise RuntimeError(msg)
+            print(f"{msg}, using stub")
             self._backend = "stub"
 
     def _generate(self, prompt: str, system: Optional[str] = None, max_tokens: int = 512, json_mode: bool = False, temperature: float = 0.8) -> "GenerationResult":
