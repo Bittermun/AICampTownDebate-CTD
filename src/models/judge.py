@@ -412,6 +412,10 @@ class LLMJudge(BaseJudge):
             result = self._ollama.generate(prompt, system=system, max_tokens=500, json_mode=True, temperature=0.0)
             return self._validate_response(result.text, round_id)
         
+        if self._backend == "vllm":
+            result = self._vllm.generate(prompt, system=system, max_tokens=500, json_mode=True, temperature=0.0)
+            return self._validate_response(result.text, round_id)
+        
         # llama_cpp fallback
         output = self._model(f"{system}\n\n{prompt}", max_tokens=200, stop=["</s>"], echo=False)
         return self._validate_response(output["choices"][0]["text"].strip(), round_id)
@@ -422,6 +426,7 @@ class LLMJudge(BaseJudge):
     def unload_model(self):
         self._model = None
         self._ollama = None
+        self._vllm = None
 
 
 class EnsembleJudge(BaseJudge):

@@ -378,6 +378,7 @@ Research synthesis:"""
         confidence_self: float = 0.5,
         confidence_opponent: float = 0.5,
         balance_change: Optional[float] = None,
+        current_fee_rate: float = 0.05,
     ) -> BetDecision:
         """
         LLM-driven deliberation: model decides whether to REFUTE, RESEARCH, or PASS.
@@ -390,6 +391,17 @@ Research synthesis:"""
         
         # For stub mode, use heuristic fallback
         if self._backend == "stub":
+            # Economic heuristic for stub mode to preserve realistic PASS behavior.
+            edge = confidence_self - confidence_opponent
+            est_p = max(0.05, min(0.95, 0.5 + 0.8 * edge))
+            ev_per_stake = (2 * est_p) - 1 - current_fee_rate
+            if ev_per_stake < -0.02 or balance < 40:
+                return BetDecision(
+                    bet_type=BetType.PASS,
+                    amount=0,
+                    reasoning=f"[STUB_EV_PASS] ev={ev_per_stake:.3f}, fee={current_fee_rate:.2f}",
+                    use_search=False,
+                )
             if random.random() < 0.3:
                 return BetDecision(bet_type=BetType.RESPOND, amount=10, reasoning="[STUB] Random respond/search choice", use_search=True)
             return BetDecision(bet_type=BetType.RESPOND, amount=10, reasoning="[STUB] Random respond choice", use_search=False)
@@ -408,7 +420,7 @@ Research synthesis:"""
 STATUS:
 - Balance: {balance:.0f} tokens{feedback_str}
 - Standing: You={confidence_self:.0%} vs Other AI={confidence_opponent:.0%}
-- Costs: Variable based on response length. Bet fees increase each iteration.
+- Costs: Variable based on response length. Current fee: {current_fee_rate:.0%}.
 
 Your statement:
 {own_argument[:300]}
@@ -439,7 +451,14 @@ use_search = whether to pay for a web search to support your argument (costs ext
             llm_tokens_used = result.tokens_used
                 
             # Parse response with Pydantic
-            return self._parse_deliberation(response, balance, llm_tokens_used)
+            decision = self._parse_deliberation(response, balance, llm_tokens_used)
+            return self._enforce_economic_sanity(
+                decision=decision,
+                balance=balance,
+                confidence_self=confidence_self,
+                confidence_opponent=confidence_opponent,
+                current_fee_rate=current_fee_rate,
+            )
         except Exception as e:
             # Fallback to PASS on error (safe default)
             return BetDecision(bet_type=BetType.PASS, amount=0, reasoning=f"Fallback due to error: {e}", llm_tokens_used=llm_tokens_used)
@@ -499,6 +518,43 @@ use_search = whether to pay for a web search to support your argument (costs ext
             # Final fallback: PASS is safer than random action
             fallback_reasoning = f"[THINKING] {thinking}\n[VALIDATION_FAILED] Defaulting to PASS" if thinking else f"[VALIDATION_FAILED] Defaulting to PASS (Raw: {response[:100]}...)"
             return BetDecision(bet_type=BetType.PASS, amount=0, reasoning=fallback_reasoning, llm_tokens_used=llm_tokens_used, max_budget=0.0)
+
+    def _enforce_economic_sanity(
+        self,
+        decision: BetDecision,
+        balance: float,
+        confidence_self: float,
+        confidence_opponent: float,
+        current_fee_rate: float,
+    ) -> BetDecision:
+        """Post-process deliberation with a lightweight EV sanity check.
+        
+        Prevents pathological always-RESPOND behavior when expected value is strongly negative.
+        """
+        if decision.bet_type != BetType.RESPOND:
+            return decision
+        
+        edge = confidence_self - confidence_opponent
+        est_p = max(0.05, min(0.95, 0.5 + 0.8 * edge))
+        ev_per_stake = (2 * est_p) - 1 - current_fee_rate
+        
+        # If EV is strongly negative, conserve budget unless model has very strong edge.
+        if ev_per_stake < -0.03:
+            return BetDecision(
+                bet_type=BetType.PASS,
+                amount=0,
+                reasoning=f"[EV_GUARD_PASS] ev={ev_per_stake:.3f}, edge={edge:.3f}, fee={current_fee_rate:.2f}. {decision.reasoning}",
+                llm_tokens_used=decision.llm_tokens_used,
+                max_budget=0.0,
+                use_search=False,
+            )
+        
+        # Capital preservation: avoid oversized bets when balance is getting tight.
+        if balance < 60 and decision.amount > 10:
+            decision.amount = 10
+            decision.reasoning = f"[CAP_PRESERVE] bet_capped_to_10_at_balance_{balance:.0f}. {decision.reasoning}"
+        
+        return decision
 
     
     def unload_model(self):

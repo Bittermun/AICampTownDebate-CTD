@@ -30,32 +30,76 @@ If no prefix is provided, demos default to `ollama:`.
 pip install -r requirements.txt
 ```
 
-If you use Ollama:
+If using Ollama:
 
 ```bash
 ollama serve
 ollama pull qwen2.5:1.5b
 ```
 
-If you use search during debate, `ddgs` is already included in `requirements.txt`.
-
 ## Run
 
-Dynamic single-round demo:
+Strict dynamic run (recommended):
 
 ```bash
 python demo_dynamic.py --config configs/tournament_config.yaml
 ```
 
-Tournament demo:
+Strict tournament run (recommended):
 
 ```bash
-python demo_tournament.py --config configs/tournament_config.yaml
+python demo_tournament.py --config configs/tournament_config.yaml --gate-judge-variance
 ```
 
-## Project Status
+Recommended Ollama scale-up run (available on this machine now):
 
-Core mechanics are implemented and testable, but this is still an experimental framework and defaults may evolve.
+```bash
+python demo_tournament.py --config configs/ollama_tournament_recommended.yaml --gate-judge-variance
+```
+
+Recommended vLLM research tournament (24 rounds):
+
+```bash
+set VLLM_BASE_URL=http://localhost:8000
+python demo_tournament.py --config configs/vllm_tournament_recommended.yaml --gate-judge-variance
+```
+
+Helper scripts:
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/run_research_tournament.ps1
+powershell -ExecutionPolicy Bypass -File scripts/start_vllm_docker.ps1
+powershell -ExecutionPolicy Bypass -File scripts/run_vllm_research.ps1
+```
+
+The one-command vLLM runner emits:
+- `logs/vllm_research_summary_<timestamp>.json` (winner, balance spread, mean pass/aggression, judge variance, artifact paths)
+
+Development fallback run (allows stub/fallback, not valid for serious data):
+
+```bash
+python demo_tournament.py --config configs/tournament_config.yaml --allow-stub
+```
+
+## Experiment Utilities
+
+Judge variance stress test:
+
+```bash
+python tests/stress_judge_variance.py --model ollama:qwen2.5:1.5b
+```
+
+Baseline vs economy comparison:
+
+```bash
+python tests/reproduce_baseline_vs_economy.py --config configs/tournament_config.yaml
+```
+
+Economy calibration from runway assumptions:
+
+```bash
+python tests/derive_economy_params.py --survival-rounds 6 --avg-generation-cost 30 --avg-bet-size 20
+```
 
 ## Documentation
 

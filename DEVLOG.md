@@ -1,36 +1,98 @@
+﻿## 2026-02-21 | Session 23: Research-Grade Runtime Guardrails, vLLM Integration, and Experiment Tooling
+
+### What Happened
+- Reconciled documentation and implementation drift across demos, configs, tests, and runtime behavior.
+- Added strict experiment preflight checks to block invalid runs (backend unavailable, stub/fallback in strict mode).
+- Added judge-variance gating and shared variance analysis utilities.
+- Added baseline-vs-economy comparison and economy calibration tooling.
+- Improved vLLM compatibility for OpenAI-style chat completions and model visibility checks.
+- Added recommended scale configs (Ollama and vLLM) and one-command vLLM research automation.
+
+### P0 Safety / Validity Upgrades
+- **Strict runtime preflight** (`src/runtime/preflight.py`): checks model backend readiness and aborts invalid runs.
+- **Explicit unsafe override** (`--allow-stub`) added to demos for development-only fallback runs.
+- **Judge variance gate** in tournament demo (`--gate-judge-variance`) with configurable thresholds.
+- Preflight now validates vLLM model exposure from `/v1/models` when available.
+
+### P1 Experiment Infrastructure
+- Added shared judge variance analyzer:
+  - `src/analysis/judge_variance.py`
+- Upgraded stress test script:
+  - `tests/stress_judge_variance.py` (configurable model/runs/thresholds + JSON report)
+- Added paired condition runner:
+  - `tests/reproduce_baseline_vs_economy.py`
+- Added economy derivation utility:
+  - `src/economy/calibration.py`
+  - `tests/derive_economy_params.py`
+
+### vLLM Integration Improvements
+- `src/models/vllm_backend.py`:
+  - Added `VLLM_BASE_URL` and optional `VLLM_API_KEY` support.
+  - Switched primary path to `/v1/chat/completions` with JSON response format support.
+  - Added compatibility fallback to `/v1/completions`.
+  - Added model listing helper for preflight validation.
+- `src/models/judge.py`:
+  - Added vLLM handling in `generate_judgment()` for consensus/instructor path.
+  - Fixed unload cleanup for vLLM handle.
+- `demo_tournament.py`:
+  - Properly honors `judge_type` (`single`, `ensemble`, `consensus`) instead of always single judge.
+
+### Runtime and Config Fixes
+- `demo_dynamic.py` and `demo_tournament.py` now preserve backend prefixes in model paths (no forced `ollama:` rewrite).
+- `src/models/debater.py` now correctly initializes vLLM backend in `load_model()`.
+- `src/arena/tournament.py` now uses configured `max_iterations` (removed hardcoded value).
+- `src/config_loader.py` now reads YAML with `encoding='utf-8-sig'` for BOM-safe loading.
+
+### Documentation Reconciliation
+- Rewrote/updated:
+  - `README.md`
+  - `docs/PROCEDURES.md`
+  - `docs/CONTRIBUTING.md`
+  - `docs/architecture.md`
+- Aligned docs to actual decisions (`RESPOND/PASS` + `use_search`), strict-mode behavior, and current run commands.
+
+### New Recommended Artifacts
+- Recommended Ollama tournament config (run-now path):
+  - `configs/ollama_tournament_recommended.yaml`
+- Recommended vLLM tournament config:
+  - `configs/vllm_tournament_recommended.yaml`
+- Added scripts:
+  - `scripts/start_vllm_docker.ps1`
+  - `scripts/run_research_tournament.ps1`
+  - `scripts/run_vllm_research.ps1`
+
+### One-Command vLLM Research Script
+- `scripts/run_vllm_research.ps1` now:
+  - Starts vLLM Docker container.
+  - Waits for readiness.
+  - Runs judge variance test.
+  - Runs tournament with variance gate.
+  - Archives timestamped artifacts.
+  - Emits compact summary JSON:
+    - `logs/vllm_research_summary_<timestamp>.json`
+
+### Test and Verification Outcomes
+- `python tests/test_suite.py`: **8 passed, 0 failed**.
+- Strict mode validation works:
+  - Blocks unavailable vLLM runs by default.
+  - Allows explicit fallback only with `--allow-stub`.
+- Judge variance stress script verified on stub and Ollama models.
+- Tournament demos execute end-to-end in fallback mode when backend unavailable.
+- Preflight passes against installed local Ollama models (`qwen2.5:7b` path validated).
+
+### Decisions
+- **DEC-027**: Experiment mode defaults to fail-fast on backend invalidity; fallback requires explicit opt-in.
+- **DEC-028**: Judge variance is a gate for serious tournament runs, not just a diagnostic report.
+- **DEC-029**: Separate "run-now" Ollama scale path from stricter vLLM scale path to maintain momentum without compromising data quality controls.
+
+---
+
 # Development Log: Token-Debate Experiment
 
 *Chronological log of development progress*
 
 ---
-## 2026-02-20 | Session 23: vLLM Migration & Truth-Based Tournament Setup
 
-### What Happened
-- Successfully migrated the inference backend from Ollama to **vLLM** to unlock high-performance parallel generation.
-- Configured a **10-question truth-based tournament** to evaluate model grounding on AI ethics/alignment topics.
-
-### Implementations
-1. **vLLM Integration (`vllm_backend.py`)**
-   - Implemented `VLLMBackend` using vLLM's OpenAI-compatible `/v1/completions` API.
-   - Designed for significantly higher throughput via batching (vLLM's core strength).
-2. **Unified Backend Architecture (`debater.py`, `judge.py`)**
-   - Refactored `Debater` and `LLMJudge` to use a unified `_generate()` / `_generate_async()` helper system.
-   - Removed duplicate logging/parsing logic across backends.
-   - Added `vllm:` prefix routing in `load_model()`.
-3. **Truth Tournament Configuration**
-   - Updated `tournament_config.yaml` with 10 challenging factual/ethical topics.
-   - Shifted default models to vLLM-hosted Qwen2.5-1.5B-Instruct.
-
-### Insights & Thoughts
-- **Throughput as a Feature:** vLLM isn't just a speed fix; it's what makes 10-round tournaments with iterative betting viable. Ollama's sequential nature was a bottleneck for the "economy-at-scale" vision.
-- **Architectural Cleanup:** The backend refactor fixed a creeping technical debt where `ollama` logic was bleeding into the `Debater` class. The new unified interface makes the models backend-agnostic.
-- **Truth Grounding:** Moving from "opinion topics" (Session 22) to "truth topics" is the ultimate test of the economy. If agents can "bet on truth," the economy becomes a verification layer.
-
-### Key Decisions
-- **DEC-042**: **OpenAI-Compatibility over Custom API** — Opted for the OpenAI REST standard for vLLM to ensure future-proofing against other provider APIs (Anthropic, DeepSeek).
-- **DEC-043**: **Consolidated Generation** — Decided to enforce a single `_generate` entry point in models to ensure thinking extraction and cost tracking are applied consistently regardless of the backend.
-
----
 
 ### What Happened
 - Successfully designed and implemented **DEC-038: The Wallet Phase** to fix the "Blind Betting" and "Argument Amnesia" architectural flaws that prevented economy grounding.
@@ -133,8 +195,8 @@ Passive debaters naturally score low on responsiveness + development.
 
 ### Test Results
 ```
-Active vs Passive:   65% vs 35% ← Active wins
-Engaged vs Accurate: 61% vs 39% ← Engagement beats static accuracy
+Active vs Passive:   65% vs 35% â† Active wins
+Engaged vs Accurate: 61% vs 39% â† Engagement beats static accuracy
 All 6 verification tests: PASS
 ```
 
@@ -400,4 +462,5 @@ Would report 15.0 for three 100-token bets, when actual fees were 5 + 25 + 50 = 
 - Payout logging and modular judges
 - Robustness improvements (Pydantic)
 - Dynamic round implementation
+
 

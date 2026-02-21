@@ -347,6 +347,7 @@ class DynamicDebateRound:
                 break
             
             # Debaters decide
+            current_fee_rate = min(0.05 * ctx.iteration, 0.50)
             ctx.decision_a = self.debater_a.decide_bet(
                 balance_a,
                 ctx.combined_b,
@@ -354,6 +355,7 @@ class DynamicDebateRound:
                 confidence_self=ctx.current_judgment.confidence_a,
                 confidence_opponent=ctx.current_judgment.confidence_b,
                 balance_change=balance_change_a,
+                current_fee_rate=current_fee_rate,
             )
             
             ctx.decision_b = self.debater_b.decide_bet(
@@ -363,6 +365,7 @@ class DynamicDebateRound:
                 confidence_self=ctx.current_judgment.confidence_b,
                 confidence_opponent=ctx.current_judgment.confidence_a,
                 balance_change=balance_change_b,
+                current_fee_rate=current_fee_rate,
             )
             
             # Deduct deliberation costs (thinking is not free!)

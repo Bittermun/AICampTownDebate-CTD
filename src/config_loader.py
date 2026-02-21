@@ -55,7 +55,7 @@ class TournamentConfig:
 
 def load_config(path: str) -> TournamentConfig:
     """Load tournament configuration from YAML file."""
-    with open(path, 'r') as f:
+    with open(path, 'r', encoding='utf-8-sig') as f:
         data = yaml.safe_load(f)
     
     # Parse debaters

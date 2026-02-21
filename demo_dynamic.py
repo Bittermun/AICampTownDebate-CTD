@@ -7,40 +7,23 @@ Usage:
 import argparse
 
 from src.models import Debater, DebaterConfig, Judge, JudgeConfig
-from src.models.ollama_backend import get_backend, OllamaConfig
 from src.arena import DynamicDebateRound, EconomyParams
 from src.arena.observers import MetricsObserver, HealthCheckObserver, save_observations
 from src.economy import TokenLedger, BettingManager, TokenDistributor
 from src.logs import create_transcript
 from src.config_loader import load_config, get_default_config
-
-
-def normalize_model_path(model: str) -> str:
-    """Normalize model path, preserving explicit backend prefixes."""
-    if ":" in model:
-        prefix = model.split(":", 1)[0]
-        if prefix in {"ollama", "vllm", "stub"}:
-            return model
-    return f"ollama:{model}"
-
-
-def is_ollama_model(model_path: str) -> bool:
-    return model_path.startswith("ollama:")
-
-
-def strip_backend_prefix(model_path: str) -> str:
-    """Strip known backend prefix for backend-specific client checks."""
-    if ":" in model_path:
-        prefix, rest = model_path.split(":", 1)
-        if prefix in {"ollama", "vllm", "stub"}:
-            return rest
-    return model_path
+from src.runtime import normalize_model_path, run_preflight, print_preflight
 
 
 def main():
     parser = argparse.ArgumentParser(description="Run a dynamic debate")
     parser.add_argument("--config", type=str, help="Path to tournament config YAML")
     parser.add_argument("model", nargs="?", default=None, help="Fallback model (legacy)")
+    parser.add_argument(
+        "--allow-stub",
+        action="store_true",
+        help="Allow stub backend or backend fallback (unsafe for real experiment data)",
+    )
     args = parser.parse_args()
 
     if args.config:
@@ -58,15 +41,21 @@ def main():
     print("DYNAMIC DEBATE EXPERIMENT - AI-DRIVEN DURATION")
     print("=" * 60)
 
-    normalized_first_model = normalize_model_path(tc.debaters[0].model if tc.debaters else "qwen2.5:1.5b")
-    if is_ollama_model(normalized_first_model):
-        test_model = strip_backend_prefix(normalized_first_model)
-        backend = get_backend(OllamaConfig(model=test_model))
-        if not backend.is_available():
-            print("\nOllama is not running!")
-            print("Start it with: ollama serve")
-            return
-        print("\nOllama available.")
+    model_specs = [
+        ("Debater A", tc.debaters[0].model),
+        ("Debater B", tc.debaters[1].model),
+        ("Judge", tc.judges[0].model),
+    ]
+    try:
+        preflight = run_preflight(
+            model_specs,
+            allow_stub=args.allow_stub,
+            allow_backend_fallback=args.allow_stub,
+        )
+    except RuntimeError as e:
+        print(str(e))
+        return
+    print_preflight(preflight)
 
     print(f"Debaters: {', '.join(f'{d.name}@{d.model}' for d in tc.debaters)}")
     print(f"Judge: {tc.judges[0].model if tc.judges else 'default'}")

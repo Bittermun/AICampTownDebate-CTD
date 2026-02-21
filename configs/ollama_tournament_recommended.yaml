@@ -1,0 +1,32 @@
+﻿# Recommended Ollama Tournament Configuration (run-now)
+models:
+  judge_type: single
+  randomize_argument_order: true
+  debaters:
+    - name: "Alpha"
+      model: "qwen2.5:7b"
+    - name: "Beta"
+      model: "qwen2.5:7b"
+  judges:
+    - name: "Judge_Main"
+      model: "qwen2.5:7b"
+
+economy:
+  initial_balance: 420
+  max_debt: 105
+  tokens_per_round: 85
+  split_pot_enabled: true
+  initial_pot_amount: 40
+
+rounds:
+  num_rounds: 16
+  max_iterations: 5
+  topics:
+    - "Does increasing the number of parameters always improve an LLM's factual accuracy?"
+    - "Is Reinforcement Learning from Human Feedback (RLHF) primarily a truth-seeking or a style-matching technique?"
+    - "Do current LLMs possess internal world models or only pattern matching behavior?"
+    - "Can a sufficiently advanced AI simulate human subjective experience?"
+    - "Are scaling laws sufficient to reach AGI without architectural breakthroughs?"
+    - "Is chain-of-thought prompting surfacing latent knowledge or adding new computation?"
+    - "Do hallucinations imply a fundamental transformer limitation?"
+    - "Is AI safety research more urgent than capabilities research?"

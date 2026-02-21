@@ -46,11 +46,17 @@ Run verification suite:
 python tests/test_suite.py
 ```
 
+Run judge variance stress test:
+
+```bash
+python tests/stress_judge_variance.py --model ollama:qwen2.5:1.5b
+```
+
 Run demos:
 
 ```bash
 python demo_dynamic.py --config configs/tournament_config.yaml
-python demo_tournament.py --config configs/tournament_config.yaml
+python demo_tournament.py --config configs/tournament_config.yaml --gate-judge-variance
 ```
 
 ## Standards
