@@ -1,4 +1,47 @@
-﻿## 2026-02-21 | Session 23: Research-Grade Runtime Guardrails, vLLM Integration, and Experiment Tooling
+﻿## 2026-02-21 | Session 24: Selection Health Dashboard + EV Guard Configurability
+
+### What Happened
+- Implemented a **Selection Health Dashboard** to quantify whether tournament dynamics are meaningful vs. noisy.
+- Made EV-guard behavior configurable via YAML (per debater), enabling controlled A/B experiments.
+- Integrated dashboard generation into the one-command vLLM research pipeline.
+
+### Key Additions
+- `src/analysis/selection_health.py`
+  - New metrics: `bankruptcy_rate`, `survival_runway_observed`, `pass_rate`, `aggression_rate`,
+    `mutual_pass_round_rate`, `avg_iterations`, `judge_score_entropy_bits`, `judge_margin_mean/stdev`,
+    `adaptation_gain_after_loss`, `economy_reasoning_rate`, and composite `health_score`.
+- `tests/selection_health_dashboard.py`
+  - CLI script to compute dashboard from transcript/results/ledger artifacts.
+- `scripts/run_vllm_research.ps1`
+  - Now runs dashboard automatically and writes `logs/selection_health_dashboard_<timestamp>.json`.
+
+### EV Guard Configurability
+- Added per-debater config knobs in `DebaterConfig` and YAML loader:
+  - `ev_guard_enabled`
+  - `ev_guard_min_ev`
+  - `ev_guard_edge_scale`
+  - `low_balance_threshold`
+  - `low_balance_bet_cap`
+- Wired through demos (`demo_dynamic.py`, `demo_tournament.py`) and recommended configs.
+
+### Verification / Observations
+- Regression suite remains green: `8 passed, 0 failed`.
+- Dynamic behavior improved from max-iteration saturation to earlier mutual PASS in smoke runs.
+- Dashboard run on latest 10-round artifact produced:
+  - `pass_rate=0.625`, `aggression_rate=0.375`, `mutual_pass_round_rate=1.0`,
+    `judge_score_entropy_bits=0.881`, `adaptation_gain_after_loss=0.044`, `health_score=0.487`.
+
+### Interpretation
+- This run is **directionally useful** but **not sufficient** for strong conclusions.
+- Need repeated runs (same config + multiple seeds/topics) to estimate variance and confidence intervals.
+
+### Decisions
+- **DEC-030**: Use dashboard metrics as default quality gate for tournament evidence quality.
+- **DEC-031**: Treat single-run dashboard outputs as directional diagnostics, not final proof.
+
+---
+
+## 2026-02-21 | Session 23: Research-Grade Runtime Guardrails, vLLM Integration, and Experiment Tooling
 
 ### What Happened
 - Reconciled documentation and implementation drift across demos, configs, tests, and runtime behavior.
@@ -462,5 +505,6 @@ Would report 15.0 for three 100-token bets, when actual fees were 5 + 25 + 50 = 
 - Payout logging and modular judges
 - Robustness improvements (Pydantic)
 - Dynamic round implementation
+
 
 

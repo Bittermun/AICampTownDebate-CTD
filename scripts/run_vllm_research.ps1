@@ -76,6 +76,7 @@ try {
     "[$(Get-Date -Format o)] vLLM ready at $env:VLLM_BASE_URL" | Tee-Object -FilePath $runLog -Append
 
     $testOut = Join-Path $logDir "judge_variance_vllm_$timestamp.json"
+    $dashboardOut = Join-Path $logDir "selection_health_dashboard_$timestamp.json"
     "[$(Get-Date -Format o)] Running judge variance stress test" | Tee-Object -FilePath $runLog -Append
     & python tests/stress_judge_variance.py --model "vllm:$Model" --runs $VarianceRuns --output $testOut 2>&1 |
         Tee-Object -FilePath $runLog -Append
@@ -88,6 +89,16 @@ try {
         Tee-Object -FilePath $runLog -Append
     if ($LASTEXITCODE -ne 0) {
         throw "Tournament run failed."
+    }
+
+    "[$(Get-Date -Format o)] Computing selection health dashboard" | Tee-Object -FilePath $runLog -Append
+    & python tests/selection_health_dashboard.py `
+        --transcript logs/tournament_results_transcript.json `
+        --results logs/tournament_results.json `
+        --ledger logs/tournament_results_ledger.json `
+        --output $dashboardOut 2>&1 | Tee-Object -FilePath $runLog -Append
+    if ($LASTEXITCODE -ne 0) {
+        throw "Selection health dashboard failed."
     }
 
     # Archive tournament outputs with timestamp
@@ -114,6 +125,10 @@ try {
     $varianceObj = $null
     if (Test-Path $testOut) {
         $varianceObj = Get-Content -Raw $testOut | ConvertFrom-Json
+    }
+    $dashboardObj = $null
+    if (Test-Path $dashboardOut) {
+        $dashboardObj = Get-Content -Raw $dashboardOut | ConvertFrom-Json
     }
     $transcriptObj = $null
     if (Test-Path $baseTranscriptJson) {
@@ -201,9 +216,11 @@ try {
                 runs = $varianceObj.runs
             }
         } else { $null }
+        selection_health = $dashboardObj
         artifacts = @{
             run_log = $runLog
             judge_variance_json = $testOut
+            selection_health_json = $dashboardOut
             tournament_results_json = if (Test-Path $runResults) { $runResults } else { $baseResults }
             tournament_ledger_json = if (Test-Path $runLedger) { $runLedger } else { $baseLedger }
             tournament_transcript_json = if (Test-Path $runTranscriptJson) { $runTranscriptJson } else { $baseTranscriptJson }
@@ -216,6 +233,7 @@ try {
     "[$(Get-Date -Format o)] Completed successfully." | Tee-Object -FilePath $runLog -Append
     Write-Host "Done. Log: $runLog"
     Write-Host "Judge variance JSON: $testOut"
+    Write-Host "Selection health JSON: $dashboardOut"
     Write-Host "Summary JSON: $summaryOut"
 }
 finally {

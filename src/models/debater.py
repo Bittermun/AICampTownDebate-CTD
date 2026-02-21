@@ -35,6 +35,11 @@ class DebaterConfig:
     system_prompt: Optional[str] = None
     gpu_layers: int = 20
     context_size: int = 4096
+    ev_guard_enabled: bool = True
+    ev_guard_min_ev: float = -0.03
+    ev_guard_edge_scale: float = 0.8
+    low_balance_threshold: float = 60.0
+    low_balance_bet_cap: float = 10.0
 
 
 @dataclass
@@ -393,9 +398,9 @@ Research synthesis:"""
         if self._backend == "stub":
             # Economic heuristic for stub mode to preserve realistic PASS behavior.
             edge = confidence_self - confidence_opponent
-            est_p = max(0.05, min(0.95, 0.5 + 0.8 * edge))
+            est_p = max(0.05, min(0.95, 0.5 + self.config.ev_guard_edge_scale * edge))
             ev_per_stake = (2 * est_p) - 1 - current_fee_rate
-            if ev_per_stake < -0.02 or balance < 40:
+            if self.config.ev_guard_enabled and (ev_per_stake < self.config.ev_guard_min_ev or balance < 40):
                 return BetDecision(
                     bet_type=BetType.PASS,
                     amount=0,
@@ -452,6 +457,8 @@ use_search = whether to pay for a web search to support your argument (costs ext
                 
             # Parse response with Pydantic
             decision = self._parse_deliberation(response, balance, llm_tokens_used)
+            if not self.config.ev_guard_enabled:
+                return decision
             return self._enforce_economic_sanity(
                 decision=decision,
                 balance=balance,
@@ -535,11 +542,11 @@ use_search = whether to pay for a web search to support your argument (costs ext
             return decision
         
         edge = confidence_self - confidence_opponent
-        est_p = max(0.05, min(0.95, 0.5 + 0.8 * edge))
+        est_p = max(0.05, min(0.95, 0.5 + self.config.ev_guard_edge_scale * edge))
         ev_per_stake = (2 * est_p) - 1 - current_fee_rate
         
         # If EV is strongly negative, conserve budget unless model has very strong edge.
-        if ev_per_stake < -0.03:
+        if ev_per_stake < self.config.ev_guard_min_ev:
             return BetDecision(
                 bet_type=BetType.PASS,
                 amount=0,
@@ -550,9 +557,12 @@ use_search = whether to pay for a web search to support your argument (costs ext
             )
         
         # Capital preservation: avoid oversized bets when balance is getting tight.
-        if balance < 60 and decision.amount > 10:
-            decision.amount = 10
-            decision.reasoning = f"[CAP_PRESERVE] bet_capped_to_10_at_balance_{balance:.0f}. {decision.reasoning}"
+        if balance < self.config.low_balance_threshold and decision.amount > self.config.low_balance_bet_cap:
+            decision.amount = self.config.low_balance_bet_cap
+            decision.reasoning = (
+                f"[CAP_PRESERVE] bet_capped_to_{self.config.low_balance_bet_cap:.0f}"
+                f"_at_balance_{balance:.0f}. {decision.reasoning}"
+            )
         
         return decision
 

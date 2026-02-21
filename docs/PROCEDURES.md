@@ -31,6 +31,12 @@ ollama pull qwen2.5:1.5b
 - Default demos run in strict preflight mode.
 - Strict mode blocks runs when backend/model checks fail.
 - `--allow-stub` explicitly allows fallback/stub runs (good for plumbing tests, bad for evidence-quality data).
+- Debater EV guard knobs can be tuned per debater in config:
+  - `ev_guard_enabled`
+  - `ev_guard_min_ev`
+  - `ev_guard_edge_scale`
+  - `low_balance_threshold`
+  - `low_balance_bet_cap`
 
 ## Dynamic Debate Run
 
@@ -70,6 +76,13 @@ powershell -ExecutionPolicy Bypass -File scripts/run_vllm_research.ps1
 
 This command now also writes a compact summary JSON:
 - `logs/vllm_research_summary_<timestamp>.json`
+- `logs/selection_health_dashboard_<timestamp>.json`
+
+Standalone dashboard command:
+
+```bash
+python tests/selection_health_dashboard.py --transcript logs/tournament_results_transcript.json --results logs/tournament_results.json --ledger logs/tournament_results_ledger.json
+```
 
 Options:
 - `--variance-runs` (default 10)

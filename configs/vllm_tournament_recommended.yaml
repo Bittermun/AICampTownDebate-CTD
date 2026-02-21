@@ -5,8 +5,18 @@ models:
   debaters:
     - name: "Alpha"
       model: "vllm:Qwen/Qwen2.5-7B-Instruct"
+      ev_guard_enabled: true
+      ev_guard_min_ev: -0.03
+      ev_guard_edge_scale: 0.8
+      low_balance_threshold: 60
+      low_balance_bet_cap: 10
     - name: "Beta"
       model: "vllm:Qwen/Qwen2.5-7B-Instruct"
+      ev_guard_enabled: true
+      ev_guard_min_ev: -0.03
+      ev_guard_edge_scale: 0.8
+      low_balance_threshold: 60
+      low_balance_bet_cap: 10
   judges:
     - name: "Judge_Main"
       model: "vllm:Qwen/Qwen2.5-7B-Instruct"

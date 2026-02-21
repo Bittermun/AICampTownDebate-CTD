@@ -79,11 +79,21 @@ def main():
         model_path=normalize_model_path(tc.debaters[0].model),
         name=f"Debater_{tc.debaters[0].name}",
         system_prompt=tc.debaters[0].system_prompt,
+        ev_guard_enabled=tc.debaters[0].ev_guard_enabled,
+        ev_guard_min_ev=tc.debaters[0].ev_guard_min_ev,
+        ev_guard_edge_scale=tc.debaters[0].ev_guard_edge_scale,
+        low_balance_threshold=tc.debaters[0].low_balance_threshold,
+        low_balance_bet_cap=tc.debaters[0].low_balance_bet_cap,
     ))
     debater_b = Debater(DebaterConfig(
         model_path=normalize_model_path(tc.debaters[1].model),
         name=f"Debater_{tc.debaters[1].name}",
         system_prompt=tc.debaters[1].system_prompt,
+        ev_guard_enabled=tc.debaters[1].ev_guard_enabled,
+        ev_guard_min_ev=tc.debaters[1].ev_guard_min_ev,
+        ev_guard_edge_scale=tc.debaters[1].ev_guard_edge_scale,
+        low_balance_threshold=tc.debaters[1].low_balance_threshold,
+        low_balance_bet_cap=tc.debaters[1].low_balance_bet_cap,
     ))
 
     from src.models.judge import EnsembleJudge, ConsensusJudge, LLMJudge

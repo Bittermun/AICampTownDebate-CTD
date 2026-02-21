@@ -83,11 +83,21 @@ def main():
         model_path=normalize_model_path(cfg.debaters[0].model),
         name=f"Debater_{cfg.debaters[0].name}",
         system_prompt=cfg.debaters[0].system_prompt,
+        ev_guard_enabled=cfg.debaters[0].ev_guard_enabled,
+        ev_guard_min_ev=cfg.debaters[0].ev_guard_min_ev,
+        ev_guard_edge_scale=cfg.debaters[0].ev_guard_edge_scale,
+        low_balance_threshold=cfg.debaters[0].low_balance_threshold,
+        low_balance_bet_cap=cfg.debaters[0].low_balance_bet_cap,
     ))
     debater_b = Debater(DebaterConfig(
         model_path=normalize_model_path(cfg.debaters[1].model),
         name=f"Debater_{cfg.debaters[1].name}",
         system_prompt=cfg.debaters[1].system_prompt,
+        ev_guard_enabled=cfg.debaters[1].ev_guard_enabled,
+        ev_guard_min_ev=cfg.debaters[1].ev_guard_min_ev,
+        ev_guard_edge_scale=cfg.debaters[1].ev_guard_edge_scale,
+        low_balance_threshold=cfg.debaters[1].low_balance_threshold,
+        low_balance_bet_cap=cfg.debaters[1].low_balance_bet_cap,
     ))
     
     # Create judge(s) from config

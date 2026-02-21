@@ -13,6 +13,11 @@ class DebaterSpec:
     name: str
     model: str
     system_prompt: Optional[str] = None
+    ev_guard_enabled: bool = True
+    ev_guard_min_ev: float = -0.03
+    ev_guard_edge_scale: float = 0.8
+    low_balance_threshold: float = 60.0
+    low_balance_bet_cap: float = 10.0
 
 
 @dataclass
@@ -65,6 +70,11 @@ def load_config(path: str) -> TournamentConfig:
             name=d['name'],
             model=d['model'],
             system_prompt=d.get('system_prompt'),
+            ev_guard_enabled=d.get('ev_guard_enabled', True),
+            ev_guard_min_ev=d.get('ev_guard_min_ev', -0.03),
+            ev_guard_edge_scale=d.get('ev_guard_edge_scale', 0.8),
+            low_balance_threshold=d.get('low_balance_threshold', 60.0),
+            low_balance_bet_cap=d.get('low_balance_bet_cap', 10.0),
         ))
     
     # Parse judges

@@ -74,6 +74,7 @@ powershell -ExecutionPolicy Bypass -File scripts/run_vllm_research.ps1
 
 The one-command vLLM runner emits:
 - `logs/vllm_research_summary_<timestamp>.json` (winner, balance spread, mean pass/aggression, judge variance, artifact paths)
+- `logs/selection_health_dashboard_<timestamp>.json` (selection health metrics: pass/aggression, entropy, adaptation, health score)
 
 Development fallback run (allows stub/fallback, not valid for serious data):
 
