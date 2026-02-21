@@ -15,6 +15,7 @@ from ..logs import create_transcript, DebateTranscript
 @dataclass
 class EconomyParams:
     num_rounds: int = 5
+    max_iterations: int = 10
     initial_balance: float = 100.0
     max_debt: float = 50.0
     tokens_per_round: float = 20.0
@@ -133,7 +134,7 @@ class Tournament:
                     self.ledger,
                     self.betting,
                     self.distributor,
-                    max_iterations=10,
+                    max_iterations=self.config.max_iterations,
                     observers=self.observers,
                     split_pot_enabled=self.split_pot_enabled,
                     initial_pot_amount=self.initial_pot_amount,

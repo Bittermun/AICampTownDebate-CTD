@@ -9,9 +9,9 @@ debater = Debater(config)
 # Test cases: valid, embedded, and garbage
 cases = [
     ('{"decision": "PASS", "amount": 0, "reasoning": "ok"}', BetType.PASS, "Valid JSON"),
-    ('I think we should {"decision": "REFUTE", "amount": 10, "reasoning": "test"} pass', BetType.REFUTATION, "Embedded JSON"),
+    ('I think we should {"decision": "RESPOND", "amount": 10, "reasoning": "test"} pass', BetType.RESPOND, "Embedded JSON"),
     ('No JSON here at all just text', BetType.PASS, "No JSON (fallback)"),
-    ('<thinking>Let me think...</thinking>{"decision": "RESEARCH", "amount": 5, "reasoning": "need data"}', BetType.RESEARCH, "With thinking tags"),
+    ('<thinking>Let me think...</thinking>{"decision": "RESPOND", "amount": 5, "reasoning": "need data"}', BetType.RESPOND, "With thinking tags"),
 ]
 
 print("Testing _parse_deliberation edge cases:\n")

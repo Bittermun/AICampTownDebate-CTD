@@ -93,7 +93,7 @@ class ResearchTool:
         if client is None:
             return SearchResult(
                 query=query,
-                error="duckduckgo-search not installed. Run: pip install duckduckgo-search"
+                error="ddgs not installed. Run: pip install ddgs"
             )
         
         try:

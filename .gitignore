@@ -36,5 +36,5 @@ config.yaml
 !config.yaml.example
 
 # Models (GGUF etc)
-models/
+/models/
 *.gguf

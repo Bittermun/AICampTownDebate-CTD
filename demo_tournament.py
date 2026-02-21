@@ -16,6 +16,14 @@ from src.arena.tournament import Tournament, EconomyParams
 from src.arena.observers import MetricsObserver
 
 
+def normalize_model_path(model: str) -> str:
+    if ":" in model:
+        prefix = model.split(":", 1)[0]
+        if prefix in {"ollama", "vllm", "stub"}:
+            return model
+    return f"ollama:{model}"
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run a multi-round debate tournament")
     parser.add_argument(
@@ -46,19 +54,19 @@ def main():
     
     # Create debaters using DebaterConfig
     debater_a = Debater(DebaterConfig(
-        model_path=f"ollama:{cfg.debaters[0].model}",
+        model_path=normalize_model_path(cfg.debaters[0].model),
         name=f"Debater_{cfg.debaters[0].name}",
         system_prompt=cfg.debaters[0].system_prompt,
     ))
     debater_b = Debater(DebaterConfig(
-        model_path=f"ollama:{cfg.debaters[1].model}",
+        model_path=normalize_model_path(cfg.debaters[1].model),
         name=f"Debater_{cfg.debaters[1].name}",
         system_prompt=cfg.debaters[1].system_prompt,
     ))
     
     # Create judge
     judge_config = JudgeConfig(
-        model_path=f"ollama:{cfg.judges[0].model}",
+        model_path=normalize_model_path(cfg.judges[0].model),
         name="Judge_Main",
         randomize_argument_order=cfg.randomize_argument_order,
     )
@@ -70,6 +78,7 @@ def main():
     # Build economy params
     economy_params = EconomyParams(
         num_rounds=cfg.rounds.num_rounds,
+        max_iterations=cfg.rounds.max_iterations,
         initial_balance=cfg.economy.initial_balance,
         max_debt=cfg.economy.max_debt,
         tokens_per_round=cfg.economy.tokens_per_round,

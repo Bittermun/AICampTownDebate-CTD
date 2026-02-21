@@ -4,11 +4,11 @@ models:
   randomize_argument_order: true  # Reduces first-mover bias
   debaters:
     - name: "Alpha"
-      model: "qwen2.5:1.5b"
+      model: "vllm:Qwen/Qwen2.5-1.5B-Instruct"
     - name: "Beta"
-      model: "qwen2.5:1.5b"
+      model: "vllm:Qwen/Qwen2.5-1.5B-Instruct"
   judges:
-    - model: "qwen2.5:1.5b"
+    - model: "vllm:Qwen/Qwen2.5-1.5B-Instruct"
 
 economy:
   initial_balance: 350
@@ -18,9 +18,16 @@ economy:
   initial_pot_amount: 50
 
 rounds:
-  num_rounds: 3
+  num_rounds: 10
   max_iterations: 5
   topics:
-    - "Should AI development be regulated by governments?"
-    - "Is remote work better than traditional office work?"
-    - "Should higher education be free for all citizens?"
+    - "Does increasing the number of parameters always improve an LLM's factual accuracy?"
+    - "Is Reinforcement Learning from Human Feedback (RLHF) primarily a truth-seeking or a style-matching technique?"
+    - "Do current LLMs possess actual internal world models or are they just stochastic parrots?"
+    - "Can a sufficiently advanced AI perfectly simulate human subjective experience (qualia)?"
+    - "Is the 'Scaling Laws' hypothesis sufficient to reach AGI without architectural breakthroughs?"
+    - "Is 'Chain of Thought' prompting primarily surfacing existing knowledge or performing new computation?"
+    - "Does the presence of 'Hallucinations' in LLMs indicate a fundamental flaw in the transformer architecture?"
+    - "Is AI safety research more urgent than AI capabilities development?"
+    - "Should AI-generated content be legally required to have a traceable watermark?"
+    - "Can an AI system ever be considered a 'moral agent' with rights and responsibilities?"

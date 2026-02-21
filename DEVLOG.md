@@ -3,7 +3,34 @@
 *Chronological log of development progress*
 
 ---
-## 2026-02-20 | Session 22: Implementing the Wallet Phase Architecture
+## 2026-02-20 | Session 23: vLLM Migration & Truth-Based Tournament Setup
+
+### What Happened
+- Successfully migrated the inference backend from Ollama to **vLLM** to unlock high-performance parallel generation.
+- Configured a **10-question truth-based tournament** to evaluate model grounding on AI ethics/alignment topics.
+
+### Implementations
+1. **vLLM Integration (`vllm_backend.py`)**
+   - Implemented `VLLMBackend` using vLLM's OpenAI-compatible `/v1/completions` API.
+   - Designed for significantly higher throughput via batching (vLLM's core strength).
+2. **Unified Backend Architecture (`debater.py`, `judge.py`)**
+   - Refactored `Debater` and `LLMJudge` to use a unified `_generate()` / `_generate_async()` helper system.
+   - Removed duplicate logging/parsing logic across backends.
+   - Added `vllm:` prefix routing in `load_model()`.
+3. **Truth Tournament Configuration**
+   - Updated `tournament_config.yaml` with 10 challenging factual/ethical topics.
+   - Shifted default models to vLLM-hosted Qwen2.5-1.5B-Instruct.
+
+### Insights & Thoughts
+- **Throughput as a Feature:** vLLM isn't just a speed fix; it's what makes 10-round tournaments with iterative betting viable. Ollama's sequential nature was a bottleneck for the "economy-at-scale" vision.
+- **Architectural Cleanup:** The backend refactor fixed a creeping technical debt where `ollama` logic was bleeding into the `Debater` class. The new unified interface makes the models backend-agnostic.
+- **Truth Grounding:** Moving from "opinion topics" (Session 22) to "truth topics" is the ultimate test of the economy. If agents can "bet on truth," the economy becomes a verification layer.
+
+### Key Decisions
+- **DEC-042**: **OpenAI-Compatibility over Custom API** — Opted for the OpenAI REST standard for vLLM to ensure future-proofing against other provider APIs (Anthropic, DeepSeek).
+- **DEC-043**: **Consolidated Generation** — Decided to enforce a single `_generate` entry point in models to ensure thinking extraction and cost tracking are applied consistently regardless of the backend.
+
+---
 
 ### What Happened
 - Successfully designed and implemented **DEC-038: The Wallet Phase** to fix the "Blind Betting" and "Argument Amnesia" architectural flaws that prevented economy grounding.

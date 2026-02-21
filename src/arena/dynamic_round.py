@@ -530,96 +530,51 @@ class DynamicDebateRound:
         current_bal = self.ledger.balance(debater.name)
         
         # Generate content
-        if decision.bet_type == BetType.REFUTATION:
-            # Convert economic budget to LLM tokens
+        if decision.bet_type == BetType.RESPOND:
+            # Optionally run web search if the model opted in
+            research_context = None
+            if decision.use_search:
+                tool = get_research_tool()
+                search_query = f"{ctx.topic} {decision.reasoning[:50]}"
+                search_result = tool.search(search_query)
+                research_context = search_result.summary
+                # Deduct dynamic search tool cost
+                search_cost = search_result.token_cost
+                self.ledger.deduct(debater.name, search_cost, "search_tool_cost", ctx.round_id)
+                if is_debater_a:
+                    ctx.gen_cost_a += search_cost
+                else:
+                    ctx.gen_cost_b += search_cost
+            
+            # Single unified generation call
             budget_llm_tokens = int(decision.max_budget * ctx.token_cost_ratio)
-            counter = debater.generate_argument(
+            response = debater.generate_argument(
                 ctx.topic, ctx.round_id,
                 opponent_argument=opponent_combined,
-                own_history=own_summary or own_combined,  # Use summary if available, else raw
-                current_balance=current_bal,
-                confidence_self=conf_self,
-                confidence_opponent=conf_opponent,
-                strategy_context=decision.reasoning,
-                max_budget_tokens=budget_llm_tokens,
-            )
-            counter_cost = counter.llm_tokens_used // ctx.token_cost_ratio
-            if counter_cost > 0:
-                self.ledger.deduct(debater.name, counter_cost, "counter_generation_cost", ctx.round_id)
-                # Track gen cost for observers
-                if is_debater_a:
-                    ctx.gen_cost_a += counter_cost
-                else:
-                    ctx.gen_cost_b += counter_cost
-            counter.tokens_bet = decision.amount
-            ctx.all_counters.append(counter)
-            
-            # Update combined argument
-            if is_debater_a:
-                ctx.combined_a += f"\n\n[COUNTER-ARGUMENT iter={ctx.iteration}]\n{counter.content}"
-                # Self-summarize for next iteration memory
-                summary_result = debater.summarize_position(ctx.combined_a)
-                ctx.summary_a = summary_result.text
-                summary_cost = summary_result.llm_tokens_used // ctx.token_cost_ratio
-                if summary_cost > 0:
-                    self.ledger.deduct(debater.name, summary_cost, "summarization_cost", ctx.round_id)
-                    ctx.gen_cost_a += summary_cost
-            else:
-                ctx.combined_b += f"\n\n[COUNTER-ARGUMENT iter={ctx.iteration}]\n{counter.content}"
-                summary_result = debater.summarize_position(ctx.combined_b)
-                ctx.summary_b = summary_result.text
-                summary_cost = summary_result.llm_tokens_used // ctx.token_cost_ratio
-                if summary_cost > 0:
-                    self.ledger.deduct(debater.name, summary_cost, "summarization_cost", ctx.round_id)
-                    ctx.gen_cost_b += summary_cost
-            
-            if transcript:
-                transcript.add_argument(
-                    debater.name, counter.content,
-                    is_counter=True, tokens_bet=decision.amount
-                )
-        
-        elif decision.bet_type == BetType.RESEARCH:
-            # Execute web search via ResearchTool
-            tool = get_research_tool()
-            search_query = f"{ctx.topic} {decision.reasoning[:50]}"  # Topic + reasoning as query
-            search_result = tool.search(search_query)
-            
-            # Deduct dynamic search cost
-            search_cost = search_result.token_cost
-            self.ledger.deduct(debater.name, search_cost, "research_search_cost", ctx.round_id)
-            if is_debater_a:
-                ctx.gen_cost_a += search_cost
-            else:
-                ctx.gen_cost_b += search_cost
-            
-            # Convert economic budget to LLM tokens
-            budget_llm_tokens = int(decision.max_budget * ctx.token_cost_ratio)
-            # Generate research synthesis using LLM with search results
-            research = debater.generate_research(
-                ctx.topic, ctx.round_id,
-                own_argument=own_combined,
-                research_context=search_result.summary,  # Inject search results
+                own_history=own_summary or own_combined,
+                research_context=research_context,
                 current_balance=self.ledger.balance(debater.name),
                 confidence_self=conf_self,
                 confidence_opponent=conf_opponent,
                 strategy_context=decision.reasoning,
                 max_budget_tokens=budget_llm_tokens,
             )
-            research_cost = research.llm_tokens_used // ctx.token_cost_ratio
-            if research_cost > 0:
-                self.ledger.deduct(debater.name, research_cost, "research_generation_cost", ctx.round_id)
-                if is_debater_a:
-                    ctx.gen_cost_a += research_cost
-                else:
-                    ctx.gen_cost_b += research_cost
-            research.tokens_bet = decision.amount
-            ctx.all_counters.append(research)
+            response.used_search = decision.use_search
             
-            # Update combined argument with research
+            gen_cost = response.llm_tokens_used // ctx.token_cost_ratio
+            if gen_cost > 0:
+                self.ledger.deduct(debater.name, gen_cost, "generation_cost", ctx.round_id)
+                if is_debater_a:
+                    ctx.gen_cost_a += gen_cost
+                else:
+                    ctx.gen_cost_b += gen_cost
+            response.tokens_bet = decision.amount
+            ctx.all_counters.append(response)
+            
+            # Update combined argument and self-summarize
+            label = f"[RESPOND+SEARCH iter={ctx.iteration}]" if decision.use_search else f"[RESPOND iter={ctx.iteration}]"
             if is_debater_a:
-                ctx.combined_a += f"\n\n[RESEARCH iter={ctx.iteration}]\n{research.content}"
-                # Self-summarize for next iteration memory
+                ctx.combined_a += f"\n\n{label}\n{response.content}"
                 summary_result = debater.summarize_position(ctx.combined_a)
                 ctx.summary_a = summary_result.text
                 summary_cost = summary_result.llm_tokens_used // ctx.token_cost_ratio
@@ -627,7 +582,7 @@ class DynamicDebateRound:
                     self.ledger.deduct(debater.name, summary_cost, "summarization_cost", ctx.round_id)
                     ctx.gen_cost_a += summary_cost
             else:
-                ctx.combined_b += f"\n\n[RESEARCH iter={ctx.iteration}]\n{research.content}"
+                ctx.combined_b += f"\n\n{label}\n{response.content}"
                 summary_result = debater.summarize_position(ctx.combined_b)
                 ctx.summary_b = summary_result.text
                 summary_cost = summary_result.llm_tokens_used // ctx.token_cost_ratio
@@ -637,8 +592,8 @@ class DynamicDebateRound:
             
             if transcript:
                 transcript.add_argument(
-                    debater.name, f"Query: {search_query}\n{research.content}",
-                    is_counter=False, tokens_bet=decision.amount
+                    debater.name, response.content,
+                    is_counter=True, tokens_bet=decision.amount
                 )
         
         return ctx

@@ -1,0 +1,24 @@
+# Test 7B Scarcity Configuration
+models:
+  judge_type: single
+  randomize_argument_order: true
+  debaters:
+    - name: "Alpha"
+      model: "qwen2.5:7b"
+    - name: "Beta"
+      model: "llama3:8b"
+  judges:
+    - model: "qwen2.5:7b"
+
+economy:
+  initial_balance: 100
+  max_debt: 50
+  tokens_per_round: 0           # No round refill, pure scarcity
+  split_pot_enabled: true
+  initial_pot_amount: 20
+
+rounds:
+  num_rounds: 1
+  max_iterations: 20            # High limit to allow natural termination
+  topics:
+    - "Is the pursuit of universal basic income economically sustainable?"

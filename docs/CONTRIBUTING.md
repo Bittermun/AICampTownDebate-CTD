@@ -1,30 +1,61 @@
-# Contributing to AICampTownDebate
+﻿# Contributing to AICampTownDebate
 
-Thank you for your interest in contributing! This project is an experimental framework for AI alignment and reasoning optimization through economic pressure.
+## Focus Areas
 
-## How to Contribute
+### 1. Model Backends
+- Backend wrappers live in `src/models/`.
+- If adding a backend, support sync generation and token usage tracking.
 
-### 1. Adding New Models
-If you want to add support for a new LLM backend:
-- Check `src/models/ollama_backend.py` for inspiration.
-- Ensure your model wrapper returns a `GenerationResult` with `tokens_used`.
+### 2. Judge Quality
+- Judge logic and prompts:
+  - `src/models/judge.py`
+  - `src/models/judge_prompts.py`
+  - `src/models/response_models.py`
+- Keep scoring schemas strict and resilient to malformed model output.
 
-### 2. Tuning Prompts
-Prompts are currently hardcoded in `src/models/debater.py` and `src/models/judge.py`. We plan to move these to a central `prompts/` directory.
+### 3. Economy + Round Logic
+- Economy:
+  - `src/economy/ledger.py`
+  - `src/economy/betting.py`
+  - `src/economy/distribution.py`
+- Round orchestration:
+  - `src/arena/dynamic_round.py`
+  - `src/arena/tournament.py`
 
-### 3. Improving the Economy
-The token economy is defined in `src/economy/ledger.py` and `src/arena/round.py`. Strategic changes to reward distribution or debt mechanics are welcome.
+### 4. Logging + Analysis
+- Transcript and export:
+  - `src/logs/transcript.py`
+- Trajectory parsing:
+  - `src/analysis/trajectory_parser.py`
 
 ## Development Setup
 
-1. Install dependencies: `pip install -r requirements.txt`
-2. Install Ollama: [ollama.com](https://ollama.com)
-3. Pull the default test model: `ollama pull qwen2.5:1.5b`
-4. Run the demo: `python demo_ollama.py`
+```bash
+pip install -r requirements.txt
+```
 
-## Coding Standards
-- Use type hints for all function signatures.
-- Document key design decisions in a local `DEVLOG.md` if you're making major architectural changes.
+Optional runtime services:
+- Ollama for `ollama:` models
+- vLLM for `vllm:` models
 
-## Recognition
-All contributors will be added to the `README.md`.
+## Validation
+
+Run verification suite:
+
+```bash
+python tests/test_suite.py
+```
+
+Run demos:
+
+```bash
+python demo_dynamic.py --config configs/tournament_config.yaml
+python demo_tournament.py --config configs/tournament_config.yaml
+```
+
+## Standards
+
+- Use type hints.
+- Keep parsing/validation explicit at LLM boundaries.
+- Prefer tests for behavior changes in judge/economy/round logic.
+- Document meaningful architectural changes in `DEVLOG.md`.
