@@ -148,6 +148,19 @@ class Tournament:
                 print(f"  Iterations: {result.iterations_completed}")
                 print(f"  Balances: A={self.ledger.balance(self.debater_a.name):.1f}, "
                       f"B={self.ledger.balance(self.debater_b.name):.1f}")
+                
+                # --- ROUND CHECKPOINT ---
+                # Print human-readable narrative from observers if available
+                if result.observation_reports:
+                    print(f"  --- Round {round_id} Checkpoint ---")
+                    for report in result.observation_reports:
+                        # Print health warnings immediately
+                        if report.observer_name == "health_check" and "WARNING" in report.narrative:
+                            print(f"  {report.narrative}")
+                        # Print general summary
+                        elif report.observer_name == "MetricsObserver":
+                            print(f"  Summary: {report.narrative}")
+                    print(f"  -------------------------")
         
         finally:
             # Unload models

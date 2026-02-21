@@ -9,7 +9,7 @@ import argparse
 from src.models import Debater, DebaterConfig, Judge, JudgeConfig
 from src.models.ollama_backend import get_backend, OllamaConfig
 from src.arena import DynamicDebateRound, EconomyParams
-from src.arena.observers import MetricsObserver, save_observations
+from src.arena.observers import MetricsObserver, HealthCheckObserver, save_observations
 from src.economy import TokenLedger, BettingManager, TokenDistributor
 from src.logs import create_transcript
 from src.config_loader import load_config, get_default_config
@@ -126,6 +126,7 @@ def main():
     
     # Create observers
     metrics_observer = MetricsObserver()
+    health_observer = HealthCheckObserver()
     
     # Register debaters
     ledger.register(debater_a.name)
@@ -158,7 +159,7 @@ def main():
             betting=betting,
             distributor=distributor,
             max_iterations=tc.rounds.max_iterations,
-            observers=[metrics_observer],
+            observers=[metrics_observer, health_observer],
             split_pot_enabled=tc.economy.split_pot_enabled,
             initial_pot_amount=tc.economy.initial_pot_amount,
         )

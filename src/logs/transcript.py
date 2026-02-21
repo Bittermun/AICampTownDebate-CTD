@@ -51,6 +51,7 @@ class RoundTranscript:
         confidence_opponent: float = 0,
         own_summary: str = "",
         opponent_summary: str = "",
+        max_budget: float = 30.0,
     ):
         """Add debater's strategic deliberation (REFUTE/RESEARCH/PASS).
         
@@ -63,11 +64,11 @@ class RoundTranscript:
                 f"**Standing**: {confidence_self:.0%} vs {confidence_opponent:.0%}\n"
                 f"**Own Argument (summary)**: {own_summary[:200]}...\n"
                 f"**Opponent (summary)**: {opponent_summary[:200]}...\n\n"
-                f"**Decision**: {decision.upper()} (bet: {amount:.1f} tokens)\n"
+                f"**Decision**: {decision.upper()} (bet: {amount:.1f} tokens) | **Max Budget**: {max_budget:.1f} tokens\n"
                 f"**Reasoning**: {reasoning}"
             )
         else:
-            content = f"**Decision**: {decision.upper()} (bet: {amount:.1f} tokens)\n**Reasoning**: {reasoning}"
+            content = f"**Decision**: {decision.upper()} (bet: {amount:.1f} tokens) | **Max Budget**: {max_budget:.1f} tokens\n**Reasoning**: {reasoning}"
         
         self.turns.append(Turn(
             speaker=speaker,

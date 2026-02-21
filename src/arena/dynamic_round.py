@@ -325,12 +325,18 @@ class DynamicDebateRound:
     ) -> DynamicRoundContext:
         """Iterative betting loop until termination condition."""
         
+        prev_balance_a = self.ledger.balance(self.debater_a.name)
+        prev_balance_b = self.ledger.balance(self.debater_b.name)
+        
         while ctx.iteration < ctx.max_iterations:
             ctx.iteration += 1
             
             # Get current balances
             balance_a = self.ledger.balance(self.debater_a.name)
             balance_b = self.ledger.balance(self.debater_b.name)
+            
+            balance_change_a = balance_a - prev_balance_a
+            balance_change_b = balance_b - prev_balance_b
             
             # Check bankruptcy
             if balance_a <= -self.ledger.max_debt:
@@ -347,6 +353,7 @@ class DynamicDebateRound:
                 ctx.combined_a,
                 confidence_self=ctx.current_judgment.confidence_a,
                 confidence_opponent=ctx.current_judgment.confidence_b,
+                balance_change=balance_change_a,
             )
             
             ctx.decision_b = self.debater_b.decide_bet(
@@ -355,6 +362,7 @@ class DynamicDebateRound:
                 ctx.combined_b,
                 confidence_self=ctx.current_judgment.confidence_b,
                 confidence_opponent=ctx.current_judgment.confidence_a,
+                balance_change=balance_change_b,
             )
             
             # Deduct deliberation costs (thinking is not free!)
@@ -392,6 +400,7 @@ class DynamicDebateRound:
                     confidence_opponent=ctx.current_judgment.confidence_b,
                     own_summary=ctx.combined_a[:400],
                     opponent_summary=ctx.combined_b[:400],
+                    max_budget=ctx.decision_a.max_budget,
                 )
                 transcript.add_deliberation(
                     self.debater_b.name,
@@ -404,6 +413,7 @@ class DynamicDebateRound:
                     confidence_opponent=ctx.current_judgment.confidence_a,
                     own_summary=ctx.combined_b[:400],
                     opponent_summary=ctx.combined_a[:400],
+                    max_budget=ctx.decision_b.max_budget,
                 )
 
             
@@ -471,6 +481,9 @@ class DynamicDebateRound:
                     observer.on_iteration(ctx, ctx.iteration)
             
             ctx.iterations_completed = ctx.iteration
+            
+            prev_balance_a = self.ledger.balance(self.debater_a.name)
+            prev_balance_b = self.ledger.balance(self.debater_b.name)
         
         # If we exited due to max iterations
         if not ctx.termination_reason:
@@ -518,6 +531,8 @@ class DynamicDebateRound:
         
         # Generate content
         if decision.bet_type == BetType.REFUTATION:
+            # Convert economic budget to LLM tokens
+            budget_llm_tokens = int(decision.max_budget * ctx.token_cost_ratio)
             counter = debater.generate_argument(
                 ctx.topic, ctx.round_id,
                 opponent_argument=opponent_combined,
@@ -525,6 +540,8 @@ class DynamicDebateRound:
                 current_balance=current_bal,
                 confidence_self=conf_self,
                 confidence_opponent=conf_opponent,
+                strategy_context=decision.reasoning,
+                max_budget_tokens=budget_llm_tokens,
             )
             counter_cost = counter.llm_tokens_used // ctx.token_cost_ratio
             if counter_cost > 0:
@@ -576,6 +593,8 @@ class DynamicDebateRound:
             else:
                 ctx.gen_cost_b += search_cost
             
+            # Convert economic budget to LLM tokens
+            budget_llm_tokens = int(decision.max_budget * ctx.token_cost_ratio)
             # Generate research synthesis using LLM with search results
             research = debater.generate_research(
                 ctx.topic, ctx.round_id,
@@ -584,6 +603,8 @@ class DynamicDebateRound:
                 current_balance=self.ledger.balance(debater.name),
                 confidence_self=conf_self,
                 confidence_opponent=conf_opponent,
+                strategy_context=decision.reasoning,
+                max_budget_tokens=budget_llm_tokens,
             )
             research_cost = research.llm_tokens_used // ctx.token_cost_ratio
             if research_cost > 0:

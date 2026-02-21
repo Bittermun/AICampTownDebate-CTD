@@ -1,31 +1,41 @@
-# Project Handoff: AI Debate Experiment
+# 🚀 AI Token-Debate Experiment: Agent Handoff
 
-## Status: Core Loop Stable (Phase: Core Complete)
-The project has a stable core loop for dynamic debates, a functional token economy, and a multi-dimensional judge system.
+Welcome to the project. You are picking up after a major strategic pivot (Session 22).
 
-## Key Breakthroughs
-- **Dynamic Debate Duration**: Rounds end organically via LLM-driven "PASS" decisions rather than fixed turn counts.
-- **Token Economy**: Debaters pay for research and refutation; they earn tokens through pot splits and winning bets.
-- **ITMC (Inference-Time Mesa-Cognition)**: Debaters use `<thinking>` tags for private deliberation before making public statements or decisions.
-- **Multi-Dimensional Judging**: Claims are scored on Accuracy, Responsiveness, and Argument Development.
+This file is your entry point. Read the documents below in order to understand the philosophy, history, and what you are being asked to build.
 
-## Recent Architectural Changes
-- **EconomyParams**: Arena-specific economic settings have been moved to `EconomyParams` to avoid confusion with global `TournamentConfig`.
-- **Roleless Prompts**: All debater prompts now use neutral framing to reduce performance volatility from role-playing.
-- **Config Wiring**: `demo_dynamic.py` and `Tournament` now correctly respect YAML configuration for all economic and iteration parameters.
+## 📚 Required Reading (Do not skip)
 
-## Directory Structure (Refined)
-- `src/arena/`: Core round and tournament orchestration.
-- `src/models/`: LLM wrappers for debaters and judges.
-- `src/economy/`: Token ledger, betting, and distribution logic.
-- `src/logs/`: Transcript formatting and persistence.
-- `tests/`: Consolidated verification and experimental scripts.
+1. **`CONCEPT.md`**
+   - Read this first. Understand the philosophy: *Emergent over Prescribed*. We are building an economic environment to select for efficient dialectical reasoning (collaborative truth-seeking), not a game to force adversarial behavior.
+2. **`AGENT_FORUM.md`**
+   - Read this second. It contains hard-won lessons from the last 20 sessions by previous agents, including critical warnings about API signatures, Windows encoding, and the dangers of arbitrary game mechanics.
+3. **`DEVLOG.md`**
+   - Read the last three entries (Sessions 20, 21, 22). This covers the most recent implementations: the "Wallet Phase" architecture, the health-check observers, and the underlying mathematical goals.
+4. **`docs/ECONOMIC_ANALYSIS.md`**
+   - Read this to understand the fundamental math of the experiment (Kelly Criterion, Expected Value). This is the blueprint for de-arbitrarifying the system.
 
-## Known Issues / Technical Debt
-- **Ollama Context Management**: Long debates can hit context limits; current mitigation is basic self-summarization.
-- **Positional Bias**: Judges can still show positional bias; `JudgeConfig.randomize_argument_order` helps but isn't a total cure.
+## 🏗️ Current Architecture State
 
-## Next Priorities
-1. **Parallel Tournaments**: Scaling system to run independent debates simultaneously.
-2. **Web Search Tool**: Enhancing the `RESEARCH` action with actual real-time information retrieval.
-3. **Advanced ITMC Analysis**: Aggregating thinking logs to measure debater "honesty" vs "strategic manipulation".
+- **Round Logic**: `src/arena/dynamic_round.py` executes a loop of phases (Arguments -> Judge -> Deliberation -> Judge Revision). The round terminates organically when both debaters choose to PASS due to low token balances (Dynamic Duration).
+- **The Wallet Phase**: Debaters must explicitly state a `max_budget` in their private deliberation JSON. This `max_budget` mathematically limits the `max_tokens` of their subsequent generation.
+- **The Engine**: We are currently running 1.5b and 7b models via local Ollama for rapid iteration.
+- **Pre-Tournament Diagnostics**: `HealthCheckObserver` watches for pathological problems (all-passes, validation failures) without blocking the core round loop.
+
+## 🚧 Next Priorities: The Dialectical Leverage Points
+
+Previous agents drifted into planning complex game mechanics (AI banks, stance forcing, oracles). The user has explicitly rejected this approach in favor of foundational science and measurement. 
+
+Your job is to implement these three non-arbitrary leverage points:
+
+### 1. The Dependent Variable: Measuring Reasoning Trajectories
+We currently have no way to prove a model's thinking improves over a tournament.
+- **The Task:** Build an analytical tool/script that parses the `<thinking>` traces across multiple transcribed rounds. We need to measure if economic pressure creates structured, compressed, or synthesized internal reasoning (e.g., measuring thinking tag length variance, unique concept repetition, or strategy shifts).
+
+### 2. The Bottleneck: Calibrating the Judge for Dialectics
+If the judge's scoring variance is too high, the economic signal is purely random noise, and the models will learn nothing.
+- **The Task:** Write a stress-testing script (`tests/stress_judge_variance.py`) that feeds the *exact same argument* through the Judge 10 times to measure its variance. Furthermore, tune the `MultiDimensionJudgment` prompt (in `judge_prompts.py`) to explicitly punish *obstinacy* (ignoring valid counter-points) and reward *synthesis* (acknowledging and integrating them).
+
+### 3. The Math: Anchoring the Economics
+The current economy runs on arbitrary numbers (e.g., initial balance 200, fee 5%).
+- **The Task:** De-arbitrarify the runway using math. Make one philosophical decision with the user: "A model must survive N rounds of losing before bankruptcy to have space to adapt." From that *one* invariant, use the Expected Value and Kelly criterion formulas in `ECONOMIC_ANALYSIS.md` to mathematically derive the Initial Balance, the Pot Size, and the Fee Rate. Replace the guesswork in `tournament_config.yaml` with derived settings.

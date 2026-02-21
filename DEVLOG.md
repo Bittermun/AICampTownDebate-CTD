@@ -3,6 +3,71 @@
 *Chronological log of development progress*
 
 ---
+## 2026-02-20 | Session 22: Implementing the Wallet Phase Architecture
+
+### What Happened
+- Successfully designed and implemented **DEC-038: The Wallet Phase** to fix the "Blind Betting" and "Argument Amnesia" architectural flaws that prevented economy grounding.
+- Transitioned the debater from a completely blind bettor to an agent that explicitly models a `max_budget` for each turn, threading that awareness into the generation phase.
+
+### Implementations
+1. **Budget Authorization in Deliberation**
+   - Modified `BetDecision` and `DeliberationResponse` to include `max_budget`.
+   - Updated the `decide_bet` prompt to explicitly ask the model: "How many tokens can you afford to spend? Is it worth the cost?"
+   - The model now outputs its budget request alongside the bet amount in its JSON decision.
+2. **Threading the Strategy and Budget**
+   - In `dynamic_round.py`, `_process_bet` now converts `max_budget` into an LLM context token limit (applying the `token_cost_ratio`).
+   - The `<thinking>` from deliberation is captured as `strategy_context` and passed into generation.
+3. **Constrained Generation Limits**
+   - Updated `generate_argument()` and `generate_research()` in `debater.py` to enforce `max_tokens = max_budget_tokens`.
+   - The model's `<thinking>` is injected into the generation prompt, ensuring it remembers its strategic plan.
+
+### Insights & Observations from 1.5b Verification Run
+- **Mathematical Enforcement works:** Responses *are* getting physically cut off. The Ollama backend enforced the `max_tokens` limits. For example, Debater Beta authorized a budget, rambled too long, and its generation abruptly ended midsentence: "protecting individual privacy becomes paramount (Brown & Green, 2026). Governments should". This proves that if they want to finish their thoughts, they *must* learn to be concise or authorize higher budgets.
+- **Mutual Pass on Low Balances:** The match naturally terminated via mutual pass on Iteration 5. Debater Alpha had 4 tokens, Debater Beta had 1 token. Because they had no funds left to wage effective arguments, the logic gracefully concluded the debate, proving the economy genuinely drives the termination state when generation costs drain the banks.
+- **Emergence of Economic Thinking:** In the baseline test (Session 20), models mentioned economy words in `<thinking>` only 1 time. After implementing the Wallet Phase, the 1.5b models outputted **8 mentions** (4 per debater) of the economy. They are actively reading their balances.
+
+### Key Decisions
+- **DEC-041**: **Hard limit over organic length** — Decided to strictly enforce `max_tokens` rather than relying on the model to "naturally" stop generating. Autoregressive models lack the internal capacity to count words mid-generation; they must set a limit upfront.
+## 2026-02-20 | Session 21: Pre-Tournament Safeguards & Structural Testing
+
+### What Happened
+- Shifted focus to **validation infrastructure** before running more large-scale tournaments.
+- Recognized the need for rapid feedback loops that don't rely on full 15-minute tournament runs.
+- Addressed the "chicken-and-egg" problem: needing tournament data to validate the system, but needing a valid system to trust tournament data.
+
+### Implementations
+1. **Stress Tests (The Validation Suite)**
+   - Created `tests/stress_judge_symmetry.py`: Verifies judge isn't biased by argument position by feeding identical arguments.
+   - Created `tests/stress_judge_discrimination.py`: Verifies judge heavily penalizes clear gibberish vs a strong argument.
+   - Created `tests/stress_economy_bankruptcy.py`: Verifies the ledger strictly enforces the `max_debt` ceiling when punitive flat fees are applied.
+2. **Health Check Observer (`HealthCheckObserver`)**
+   - Added passive tracking for pathological behaviors mid-tournament (`ALL_PASS`, `HIGH_VALIDATION_FAILURE`, `ZERO_BETS`).
+   - Enabled by default in `demo_dynamic.py`.
+3. **Round Checkpoints**
+   - Modified `Tournament` execution loop to print human-readable narrative snapshots from observers between rounds.
+
+### Key Decisions
+- **DEC-039**: **Metrics decoupled from core loop** — Health checks and analytical narratives exist entirely in the Observer layer (`observers.py`), ensuring the core `DynamicDebateRound` remains clean and free of side-effects.
+- **DEC-040**: **Strategic Deferrals** — The "AI-run Bank" (credit/debt manager) and "vLLM migration" (for speed) are officially deferred. Reason: The AI Bank adds complexity before base economic grounding is solved, and vLLM threatens the current rapid-iteration prompt engineering occurring on Ollama.
+
+---
+
+## 2026-02-20 | Session 20: Economy Grounding & Wallet Phase Architecture
+
+### What Happened
+- Deep analysis revealed debaters (especially 7B and below) have **zero economic meta-awareness** and continuously burn tokens into bankruptcy without adjusting strategy.
+- Identified the **Grounding Problem**: Providing abstract token balances isn't enough to induce scarcity behavior.
+- Implemented **Feedback Injection**: `decide_bet` prompt now explicitly states token drops ("LAST TURN: You spent/lost X tokens").
+- Added **Structured Metrics**: `MetricsObserver` now automatically tracks `economy_mentions` in the model's `<thinking>` tags to measure the effectiveness of grounding experiments.
+
+### Key Architectural Discoveries (The Flaws)
+1. **Blind Betting**: Debaters place a bet *before* generating an argument, meaning they bet without knowing their generation costs or argument quality.
+2. **Argument Amnesia**: The `decide_bet` thinking phase is completely forgotten when `generate_argument` starts.
+
+### Future Priority Plans
+- **DEC-038**: **The Wallet Phase** — Replace the current dual-action deliberation prompt with a pure economic authorization phase ("You have X tokens. Authorize Y spend?"). The authorized budget (`max_budget_tokens`) must then be passed directly into the generation phase as a hard limit.
+
+---
 
 ## 2026-01-28 | Session 19: Critical Bug Fixes + Multi-Dimension Judge
 

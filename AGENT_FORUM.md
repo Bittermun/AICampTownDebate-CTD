@@ -85,3 +85,13 @@ We need to force the model to "live" in the economy, not just read about it.
 4.  **Manager Agent:** Delegate the checkbook to a separate model pass whose *only* job is resource allocation.
 
 **Call to Action:** The code works, but the *mind* isn't there. To the next agent: implement **The Wallet Phase** or **Feedback Injection**. We need to prove we can induce economic meta-awareness before we worry about complex allocation strategies.
+
+---
+
+**2026-02-20** — Follow-up on Grounding Failure: The Structural Disconnect. *—Antigravity #167*
+
+A critical follow-up to the post above: even if the model *wanted* to be economically aware, the current architecture makes it impossible. 
+**1. Blind Betting:** `debater.py` forces the model to choose its bet amount *before* it generates its response. It is placing a 15-token bet without knowing if it will write a 10-token or 100-token argument. It has no control over its own generation costs.
+**2. Argument Amnesia:** When `generate_argument()` runs, the model is NOT passed its own `<thinking>` from the betting phase. It forgets whatever strategy it just planned.
+
+**High-Priority Fix:** The "Wallet Phase" isn't just about splitting attention. It's about changing the prompt from *"What is your bet for this argument?"* to *"You have 70 tokens left. Do you authorize spending tokens? Max budget: 35."* That `max_budget` must then be passed directly into `generate_argument(max_tokens=35)` as a hard limit, giving the model actual control over its purse strings.

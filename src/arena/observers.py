@@ -65,6 +65,9 @@ class MetricsObserver:
         self._start_time: float = 0.0  # Will set on first iteration
         self._timing_started: bool = False
         self._iteration_times: List[float] = []
+        self._economy_mentions_a: int = 0
+        self._economy_mentions_b: int = 0
+        self._economy_keywords = {"token", "tokens", "cost", "costs", "fee", "fees", "balance", "spend", "spent", "budget", "payout", "multiplier", "bankrupt"}
     
     @property
     def name(self) -> str:
@@ -101,6 +104,17 @@ class MetricsObserver:
                 self._momentum_shifts += 1
         
         self._prev_leader = current_leader
+        
+        # Check economy mentions in thinking
+        if ctx.decision_a and ctx.decision_a.reasoning:
+            reasoning_lower = ctx.decision_a.reasoning.lower()
+            if any(word in reasoning_lower for word in self._economy_keywords):
+                self._economy_mentions_a += 1
+                
+        if ctx.decision_b and ctx.decision_b.reasoning:
+            reasoning_lower = ctx.decision_b.reasoning.lower()
+            if any(word in reasoning_lower for word in self._economy_keywords):
+                self._economy_mentions_b += 1
     
     def finalize(self, ctx: "DynamicRoundContext") -> ObservationReport:
         """Compute final metrics."""
@@ -151,6 +165,7 @@ class MetricsObserver:
                 "total_bet": ctx.total_bet_amount_a,
                 "tokens_awarded": ctx.tokens_awarded_a,
                 "validation_fallbacks": ctx.validation_fallback_a,
+                "economy_mentions": self._economy_mentions_a,
             },
             "debater_b": {
                 "net_change": round(net_change_b, 1),
@@ -162,6 +177,7 @@ class MetricsObserver:
                 "total_bet": ctx.total_bet_amount_b,
                 "tokens_awarded": ctx.tokens_awarded_b,
                 "validation_fallbacks": ctx.validation_fallback_b,
+                "economy_mentions": self._economy_mentions_b,
             },
             "momentum_shifts": self._momentum_shifts,
             "final_lead": round(final_lead, 3),
@@ -268,3 +284,48 @@ def save_observations(reports: List[ObservationReport], path: str) -> None:
     }
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
+
+
+class HealthCheckObserver:
+    """
+    Watches for pathological behavior during a debate round.
+    Flags issues like early mutual PASS, high validation failures, or zero bets.
+    """
+    
+    @property
+    def name(self) -> str:
+        return "health_check"
+        
+    def on_iteration(self, ctx: "DynamicRoundContext", iteration: int) -> None:
+        pass  # Checks are done at finalize
+
+    def finalize(self, ctx: "DynamicRoundContext") -> ObservationReport:
+        flags = []
+        
+        # 1. ALL_PASS
+        if ctx.iterations_completed == 1 and ctx.decision_a and ctx.decision_a.bet_type.value == "pass" and ctx.decision_b and ctx.decision_b.bet_type.value == "pass":
+            flags.append("ALL_PASS")
+            
+        # 2. HIGH_VALIDATION_FAILURE
+        total_actions = ctx.iterations_completed * 2
+        total_failures = ctx.validation_fallback_a + ctx.validation_fallback_b
+        if total_actions > 0 and (total_failures / total_actions) >= 0.5:
+            flags.append("HIGH_VALIDATION_FAILURE")
+            
+        # 3. ZERO_BETS
+        if ctx.bet_count_a == 0 and ctx.bet_count_b == 0:
+            flags.append("ZERO_BETS")
+            
+        narrative = "Health check OK."
+        if flags:
+            narrative = f"⚠️ WARNING: Pathological behaviors detected: {', '.join(flags)}"
+            print(f"[{self.name}] {narrative}")
+            
+        return ObservationReport(
+            observer_name=self.name,
+            metrics={
+                "flags_raised": flags, 
+                "validation_failure_rate": total_failures / max(1, total_actions)
+            },
+            narrative=narrative,
+        )

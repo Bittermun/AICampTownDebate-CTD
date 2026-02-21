@@ -11,11 +11,11 @@ models:
     - model: "qwen2.5:1.5b"
 
 economy:
-  initial_balance: 200
+  initial_balance: 350
   max_debt: 50
-  tokens_per_round: 100
+  tokens_per_round: 120
   split_pot_enabled: true
-  initial_pot_amount: 40
+  initial_pot_amount: 50
 
 rounds:
   num_rounds: 3
