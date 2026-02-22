@@ -1,3 +1,9 @@
+## 2026-02-22 | Fixed Insight Distiller
+**Hypothesis:** The insight distiller script (	ests/distill_insights.py) was failing with TypeError due to structural changes in 	ournament_results.json after adopting the dynamic debate round.
+**Change:** Rewrote 	ests/distill_insights.py to parse the rich structured data directly from 	ournament_results_transcript.json instead. This correctly extracts true early balances, exact bet amounts, PASS/RESPOND actions, and judge confidence shifts.
+**Result:** Script now successfully processes the data and outputs accurate analysis metrics for all 3 puzzle questions.
+**Next:** Monitor ongoing tournament and review metrics once it completes.
+
 ## 2026-02-22 | Session 33: Iteration Run (Token Check + 3-Seed Collection)
 
 ### What Happened
@@ -636,7 +642,7 @@
 - **Emergence of Economic Thinking:** In the baseline test (Session 20), models mentioned economy words in `<thinking>` only 1 time. After implementing the Wallet Phase, the 1.5b models outputted **8 mentions** (4 per debater) of the economy. They are actively reading their balances.
 
 ### Key Decisions
-- **DEC-041**: **Hard limit over organic length** — Decided to strictly enforce `max_tokens` rather than relying on the model to "naturally" stop generating. Autoregressive models lack the internal capacity to count words mid-generation; they must set a limit upfront.
+- **DEC-041**: **Hard limit over organic length**  Decided to strictly enforce `max_tokens` rather than relying on the model to "naturally" stop generating. Autoregressive models lack the internal capacity to count words mid-generation; they must set a limit upfront.
 ## 2026-02-20 | Session 21: Pre-Tournament Safeguards & Structural Testing
 
 ### What Happened
@@ -656,8 +662,8 @@
    - Modified `Tournament` execution loop to print human-readable narrative snapshots from observers between rounds.
 
 ### Key Decisions
-- **DEC-039**: **Metrics decoupled from core loop** — Health checks and analytical narratives exist entirely in the Observer layer (`observers.py`), ensuring the core `DynamicDebateRound` remains clean and free of side-effects.
-- **DEC-040**: **Strategic Deferrals** — The "AI-run Bank" (credit/debt manager) and "vLLM migration" (for speed) are officially deferred. Reason: The AI Bank adds complexity before base economic grounding is solved, and vLLM threatens the current rapid-iteration prompt engineering occurring on Ollama.
+- **DEC-039**: **Metrics decoupled from core loop**  Health checks and analytical narratives exist entirely in the Observer layer (`observers.py`), ensuring the core `DynamicDebateRound` remains clean and free of side-effects.
+- **DEC-040**: **Strategic Deferrals**  The "AI-run Bank" (credit/debt manager) and "vLLM migration" (for speed) are officially deferred. Reason: The AI Bank adds complexity before base economic grounding is solved, and vLLM threatens the current rapid-iteration prompt engineering occurring on Ollama.
 
 ---
 
@@ -674,14 +680,14 @@
 2. **Argument Amnesia**: The `decide_bet` thinking phase is completely forgotten when `generate_argument` starts.
 
 ### Future Priority Plans
-- **DEC-038**: **The Wallet Phase** — Replace the current dual-action deliberation prompt with a pure economic authorization phase ("You have X tokens. Authorize Y spend?"). The authorized budget (`max_budget_tokens`) must then be passed directly into the generation phase as a hard limit.
+- **DEC-038**: **The Wallet Phase**  Replace the current dual-action deliberation prompt with a pure economic authorization phase ("You have X tokens. Authorize Y spend?"). The authorized budget (`max_budget_tokens`) must then be passed directly into the generation phase as a hard limit.
 
 ---
 
 ## 2026-01-28 | Session 19: Critical Bug Fixes + Multi-Dimension Judge
 
 ### Problem: "Win by Doing Nothing"
-Tournament 2 revealed Beta won without making a single valid decision—all deliberations failed JSON validation (defaulted to PASS), conserving tokens while Alpha went bankrupt fighting.
+Tournament 2 revealed Beta won without making a single valid decisionall deliberations failed JSON validation (defaulted to PASS), conserving tokens while Alpha went bankrupt fighting.
 
 ### Root Cause Analysis
 | Bug | Impact |
@@ -692,9 +698,9 @@ Tournament 2 revealed Beta won without making a single valid decision—all delibe
 
 ### Solution: Multi-Dimension Scoring
 Replaced single confidence score with 3 dimensions (research-backed):
-- **Accuracy** (40%) — Factual correctness
-- **Responsiveness** (30%) — Addressed opponent's points
-- **Development** (30%) — Refined argument over time
+- **Accuracy** (40%)  Factual correctness
+- **Responsiveness** (30%)  Addressed opponent's points
+- **Development** (30%)  Refined argument over time
 
 Passive debaters naturally score low on responsiveness + development.
 
@@ -729,7 +735,7 @@ All 6 verification tests: PASS
 - Replaced 500-char truncation with LLM-generated position summaries
 - Debaters now self-summarize after each content generation
 - **Added `<thinking>` support to `generate_argument()` and `generate_research()`**
-- Thinking is optional ("You may use...") — model decides if worth the tokens
+- Thinking is optional ("You may use...")  model decides if worth the tokens
 - Summarization costs tokens (economic constraint on memory use)
 
 ### Key Decisions
@@ -1034,7 +1040,7 @@ Would report 15.0 for three 100-token bets, when actual fees were 5 + 25 + 50 = 
   - `python tests/test_benchmark_batch_utils.py`
   - `python -m py_compile scripts/run_phase1_batch.py src/benchmark/batch_utils.py tests/test_benchmark_batch_utils.py`
 - Failed:
-  - None in this session’s targeted validation.
+  - None in this sessions targeted validation.
 
 ### Known Limits
 - Replacement mode currently advances through `replacement_roster` in listed order; no automatic performance-based selection.
