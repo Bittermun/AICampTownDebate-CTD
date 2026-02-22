@@ -9,7 +9,7 @@ import re
 from abc import ABC, abstractmethod
 from pydantic import ValidationError
 from .response_models import JudgmentResponse, MultiDimensionJudgment
-from .judge_prompts import MULTI_DIMENSION_SYSTEM, MULTI_DIMENSION_PROMPT
+from .judge_prompts import MULTI_DIMENSION_SYSTEM, MULTI_DIMENSION_PROMPT, COMPARATIVE_CONTEXT_BLOCK
 
 
 @dataclass
@@ -185,11 +185,14 @@ class LLMJudge(BaseJudge):
         argument_a: str,
         argument_b: str,
         round_id: int,
+        prior_judgment: Optional["Judgment"] = None,
     ) -> Judgment:
         """Evaluate arguments using multi-dimension scoring.
         
         Scores on 3 dimensions: accuracy, responsiveness, development.
         Falls back to single-score if multi-dim parsing fails.
+        If prior_judgment is provided, injects comparative context so the judge
+        can penalize stagnant arguments (Phase 3: Comparative Memory).
         """
         import random
         
@@ -205,8 +208,21 @@ class LLMJudge(BaseJudge):
             first_arg, second_arg = argument_a, argument_b
             first_label, second_label = "A", "B"
         
-        # Use multi-dimension prompt
-        system = MULTI_DIMENSION_SYSTEM
+        # Build comparative context block if prior scores exist
+        if prior_judgment is not None:
+            prior_conf_a = prior_judgment.confidence_a
+            prior_conf_b = prior_judgment.confidence_b
+            prior_gap = abs(prior_conf_a - prior_conf_b)
+            prior_context = COMPARATIVE_CONTEXT_BLOCK.format(
+                prior_conf_a=prior_conf_a,
+                prior_conf_b=prior_conf_b,
+                prior_gap=prior_gap,
+            )
+        else:
+            prior_context = ""  # No prior scores: blank, prompt renders normally
+        
+        # Use multi-dimension prompt — respects custom system_prompt from JudgeConfig if set
+        system = self.config.system_prompt or MULTI_DIMENSION_SYSTEM
         prompt = MULTI_DIMENSION_PROMPT.format(
             topic=topic,
             first_arg=first_arg[:1500],  # Truncate for context
@@ -215,6 +231,7 @@ class LLMJudge(BaseJudge):
             second_label=second_label,
             first_label_lower=first_label.lower(),
             second_label_lower=second_label.lower(),
+            prior_context=prior_context,
         )
         
         # Generate based on backend
@@ -256,6 +273,7 @@ class LLMJudge(BaseJudge):
         except ValidationError:
             # Fallback: try old single-score format
             return self._validate_response(text, round_id, swapped=swapped)
+
     
     def _repair_truncated_json(self, text: str) -> str:
         """Attempt to repair truncated JSON by completing missing fields and brackets.

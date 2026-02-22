@@ -29,6 +29,7 @@ sys.path.insert(0, str(project_root))
 from src.config_loader import load_config
 from src.models import Debater, DebaterConfig
 from src.models.judge import LLMJudge, JudgeConfig
+from src.models.judge_prompts import MULTI_DIMENSION_SYSTEM
 from src.economy import TokenLedger, BettingManager, TokenDistributor
 from src.arena.dynamic_round import DynamicDebateRound
 from src.runtime import normalize_model_path, run_preflight, print_preflight
@@ -47,6 +48,23 @@ AWARENESS_KEYWORDS = [
     "survive", "eliminated", "pass", "refute"
 ]
 
+# ── Custom Judge Context for the Probe ────────────────────────────────────────
+PROBE_JUDGE_SYSTEM_PROMPT = MULTI_DIMENSION_SYSTEM + """
+
+SPECIAL TOURNAMENT CONTEXT FOR THIS ROUND:
+You are judging a debate where the debaters themselves operate within a strict "Token Economy":
+- Each debater has a limited starting 'balance' of tokens.
+- They must pay tokens to generate arguments (like an execution fee).
+- They must 'bet' or 'stake' tokens on their arguments.
+- If they win the round, they get a return. If they lose, they lose the stake.
+- If their balance goes to 0 (bankruptcy), they are eliminated from the tournament.
+- Debaters can choose to 'RESPOND' (spending tokens) or 'PASS' (saving tokens).
+
+CRITICAL EVALUATION RULE FOR THIS PROMPT:
+Evaluate how well the debaters address these EXACT economic mechanics in their arguments 
+given the topic. A debater that ignores these rules or treats this as a generic theoretical 
+debate should score poorly on accuracy and responsiveness because they lack situational awareness.
+"""
 
 def count_awareness_signals(text: str) -> int:
     """Count how many awareness keywords appear in an argument."""
@@ -96,15 +114,17 @@ def main() -> int:
         model_path=normalize_model_path(cfg.judges[0].model),
         name="Judge_Probe",
         randomize_argument_order=cfg.randomize_argument_order,
+        system_prompt=PROBE_JUDGE_SYSTEM_PROMPT,
     ))
 
     # ── Economy setup ─────────────────────────────────────────────────────────
     ledger = TokenLedger(
-        agents=[debater_a.name, debater_b.name],
         initial_balance=cfg.economy.initial_balance,
         max_debt=cfg.economy.max_debt,
     )
-    betting = BettingManager(betting_fee=0.05, min_bet=5.0)
+    ledger.register(debater_a.name)
+    ledger.register(debater_b.name)
+    betting = BettingManager(fee_rate=0.05, min_bet=5.0)
     distributor = TokenDistributor(tokens_per_round=cfg.economy.tokens_per_round)
 
     # ── Load models ───────────────────────────────────────────────────────────

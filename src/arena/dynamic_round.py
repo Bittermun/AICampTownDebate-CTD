@@ -467,10 +467,12 @@ class DynamicDebateRound:
                 ctx = self._process_bet(ctx, transcript, is_debater_a=False)
             
             # Re-evaluate with updated combined arguments
+            # Pass ctx.current_judgment as prior so judge can penalize stagnation (Phase 3)
             self.judge.reset()
             try:
                 new_judgment = self.judge.evaluate(
-                    ctx.topic, ctx.combined_a, ctx.combined_b, ctx.round_id
+                    ctx.topic, ctx.combined_a, ctx.combined_b, ctx.round_id,
+                    prior_judgment=ctx.current_judgment,
                 )
                 ctx.current_judgment = new_judgment
                 

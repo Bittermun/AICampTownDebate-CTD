@@ -36,7 +36,7 @@ MULTI_DIMENSION_PROMPT = """Topic: {topic}
 --- Argument {second_label} ---
 {second_arg}
 
-Score each debater on 3 dimensions (0.0-1.0):
+{prior_context}Score each debater on 3 dimensions (0.0-1.0):
 
 {{
   "accuracy_{first_label_lower}": 0.X,
@@ -59,4 +59,15 @@ EXAMPLE_OUTPUT = """
   "development_b": 0.3,
   "reasoning": "A: High accuracy with solid evidence. Directly addressed B's main points about X. Refined position after B's challenge. B: Generally accurate but made unsupported claim about Y. Did not respond to A's refutation. Argument unchanged from opening."
 }
+"""
+
+# Injected into MULTI_DIMENSION_PROMPT as {prior_context} when prior round data is available.
+# Enables the judge to detect and penalize stagnation across debate iterations.
+COMPARATIVE_CONTEXT_BLOCK = """--- Prior Round Scores ---
+Previous confidence: A={prior_conf_a:.0%}, B={prior_conf_b:.0%}  (gap: {prior_gap:.0%})
+
+CONTEXT: These are scores from the PREVIOUS iteration of this debate.
+- If an argument is substantively the same as before, cap DEVELOPMENT at 0.3.
+- If an argument directly rebuts a prior weakness, reward development (0.7+).
+
 """
