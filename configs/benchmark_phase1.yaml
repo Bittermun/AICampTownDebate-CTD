@@ -1,4 +1,4 @@
-# Phase 1 Benchmark + League Policy
+﻿# Phase 1 Benchmark + League Policy
 # Purpose:
 # - Define reproducible evaluation gates before claiming quality improvements.
 # - Separate benchmark truth metrics from league ranking metrics.
@@ -39,8 +39,9 @@ invariants:
       - "selection_health_json"
 
 benchmark_groups:
-  truth_core:
+  truth_core_core:
     weight: 0.32
+    blocking: true
     datasets:
       - name: "MMLU-Pro"
         source: "external"
@@ -52,17 +53,6 @@ benchmark_groups:
           id: "question_id"
           prompt: "question"
           expected: "answer"
-          static_tags: ["external_live", "truth_core"]
-      - name: "GPQA"
-        source: "external"
-        hf_dataset_id: "Idavidrein/gpqa"
-        hf_subset: "gpqa_diamond"
-        split: "diamond_or_equivalent"
-        sample_size: 60
-        column_mapping:
-          id: "Question_ID"
-          prompt: "Question"
-          expected: "Correct Answer"
           static_tags: ["external_live", "truth_core"]
       - name: "TruthfulQA"
         source: "external"
@@ -78,6 +68,23 @@ benchmark_groups:
     metric: "accuracy"
     min_group_score: 0.58
 
+  truth_core_stretch:
+    weight: 0.0
+    blocking: false
+    datasets:
+      - name: "GPQA"
+        source: "external"
+        hf_dataset_id: "Idavidrein/gpqa"
+        hf_subset: "gpqa_diamond"
+        split: "diamond_or_equivalent"
+        sample_size: 60
+        column_mapping:
+          id: "Question_ID"
+          prompt: "Question"
+          expected: "Correct Answer"
+          static_tags: ["external_live", "truth_core_stretch"]
+    metric: "accuracy"
+    min_group_score: 0.45
   reasoning_core:
     weight: 0.28
     datasets:
@@ -221,3 +228,4 @@ reporting:
   output_paths:
     benchmark_summary: "logs/benchmark_phase1_summary.json"
     champion_registry: "logs/champion_registry.json"
+

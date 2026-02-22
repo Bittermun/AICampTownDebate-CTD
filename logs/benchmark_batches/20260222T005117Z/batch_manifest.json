@@ -1,0 +1,36 @@
+{
+  "batch_id": "20260222T005117Z",
+  "config": "configs/benchmark_phase1.yaml",
+  "tournament_config": "configs/ollama_tournament_recommended.yaml",
+  "model_id": "ollama:qwen2.5:7b",
+  "judge_model": "ollama:qwen2.5:7b",
+  "seeds": [
+    101
+  ],
+  "matrix_labels": [
+    "set01"
+  ],
+  "source_mode": "all_fixture",
+  "concurrency": 1,
+  "bankruptcy_retries": 1,
+  "records": [
+    {
+      "run_id": "seed101_set01",
+      "attempt": 1,
+      "seed": 101,
+      "topic_set": "set01",
+      "summary_path": "logs\\benchmark_batches\\20260222T005117Z\\seed101_set01\\attempt_1\\benchmark_summary.json",
+      "registry_path": "logs\\benchmark_batches\\20260222T005117Z\\seed101_set01\\attempt_1\\champion_registry.json",
+      "return_code": 2,
+      "bankrupt": false,
+      "terminal_bankrupt": false,
+      "pass_fail": "fail",
+      "final_pass": false,
+      "benchmark_score_pass": false,
+      "gates_pass": true,
+      "validity_pass": true,
+      "degraded_mode": true,
+      "live_source_failures": 0
+    }
+  ]
+}

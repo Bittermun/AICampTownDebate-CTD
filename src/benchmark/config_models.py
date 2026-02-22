@@ -1,4 +1,4 @@
-"""Typed config models for benchmark_phase1.yaml."""
+﻿"""Typed config models for benchmark_phase1.yaml."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -89,6 +89,7 @@ class MetricTransformSpec:
 @dataclass
 class GroupPolicy:
     weight: float
+    blocking: bool = True
     datasets: List[DatasetSpec] = field(default_factory=list)
     metric: Optional[str] = None
     metrics: List[str] = field(default_factory=list)
@@ -289,6 +290,7 @@ def load_benchmark_policy(path: str) -> BenchmarkPolicy:
             )
         benchmark_groups[group_name] = GroupPolicy(
             weight=float(group_data.get("weight", 1.0)),
+            blocking=bool(group_data.get("blocking", True)),
             datasets=datasets,
             metric=group_data.get("metric"),
             metrics=list(group_data.get("metrics", [])),
@@ -390,3 +392,5 @@ def load_benchmark_policy(path: str) -> BenchmarkPolicy:
         champion_freeze=champion_freeze,
         reporting=reporting,
     )
+
+

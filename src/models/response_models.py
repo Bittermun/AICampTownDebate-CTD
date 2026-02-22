@@ -47,32 +47,30 @@ class MultiDimensionJudgment(BaseModel):
             data['reasoning'] = json.dumps(data['reasoning'])
         return data
 
-    def weighted_confidence(self, weights: dict = None) -> tuple[float, float]:
+    def weighted_confidence(self, weights: dict = None, spread_factor: float = 0.4) -> tuple[float, float]:
         """Calculate weighted confidence scores from dimensions."""
         if weights is None:
             weights = {"accuracy": 0.4, "responsiveness": 0.3, "development": 0.3}
         
-        conf_a = (
+        raw_a = (
             weights["accuracy"] * self.accuracy_a +
             weights["responsiveness"] * self.responsiveness_a +
             weights["development"] * self.development_a
         )
-        conf_b = (
+        raw_b = (
             weights["accuracy"] * self.accuracy_b +
             weights["responsiveness"] * self.responsiveness_b +
             weights["development"] * self.development_b
         )
         
-        # Normalize to sum to 1.0
-        total = conf_a + conf_b
-        if total > 0:
-            conf_a, conf_b = conf_a / total, conf_b / total
-        else:
-            conf_a, conf_b = 0.5, 0.5
+        # Margin-based scoring preserves the gap between raw scores
+        margin = raw_a - raw_b
+        conf_a = 0.5 + (margin * spread_factor)
+        conf_b = 1.0 - conf_a
         
-        # Clamp to 10-90% range
-        conf_a = max(0.10, min(0.90, conf_a))
-        conf_b = max(0.10, min(0.90, conf_b))
+        # Clamp to 5-95% range
+        conf_a = max(0.05, min(0.95, conf_a))
+        conf_b = max(0.05, min(0.95, conf_b))
         
         return conf_a, conf_b
 

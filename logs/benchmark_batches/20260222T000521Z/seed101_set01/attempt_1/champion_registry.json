@@ -1,0 +1,17 @@
+{
+  "models": {
+    "stub": {
+      "performer_id": "196f98f72c234952",
+      "parent_performer_id": null,
+      "variant_label": null,
+      "elo": 1500.0,
+      "matches": 0,
+      "tier": "Silver",
+      "frozen": false,
+      "windows": [],
+      "manifest": {},
+      "judge_name": "stub"
+    }
+  },
+  "history": []
+}

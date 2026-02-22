@@ -1,0 +1,1146 @@
+{
+  "initial_balance": 420,
+  "max_debt": 105,
+  "balances": {
+    "Debater_Alpha": 958.4802057307014,
+    "Debater_Beta": 985.7697942692986
+  },
+  "transactions": [
+    {
+      "timestamp": "2026-02-21T16:53:27.462224",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 420,
+      "reason": "initial_balance",
+      "round": 0
+    },
+    {
+      "timestamp": "2026-02-21T16:53:27.462250",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 420,
+      "reason": "initial_balance",
+      "round": 0
+    },
+    {
+      "timestamp": "2026-02-21T16:53:53.964493",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 16,
+      "reason": "generation_cost",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T16:53:53.964507",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 21,
+      "reason": "generation_cost",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T16:54:03.948875",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 20.401146131805163,
+      "reason": "initial_bounty",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T16:54:03.948887",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 19.598853868194844,
+      "reason": "initial_bounty",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T16:54:13.465670",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 5,
+      "reason": "deliberation_cost",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T16:54:13.465680",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 5,
+      "reason": "deliberation_cost",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T16:54:13.465711",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 43.35243553008597,
+      "reason": "pot_split",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T16:54:13.465713",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 41.647564469914045,
+      "reason": "pot_split",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T16:54:32.218885",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 17,
+      "reason": "generation_cost",
+      "round": 2
+    },
+    {
+      "timestamp": "2026-02-21T16:54:32.218898",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 16,
+      "reason": "generation_cost",
+      "round": 2
+    },
+    {
+      "timestamp": "2026-02-21T16:54:40.701070",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 20.941176470588236,
+      "reason": "initial_bounty",
+      "round": 2
+    },
+    {
+      "timestamp": "2026-02-21T16:54:40.701080",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 19.058823529411764,
+      "reason": "initial_bounty",
+      "round": 2
+    },
+    {
+      "timestamp": "2026-02-21T16:54:55.872857",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 12,
+      "reason": "deliberation_cost",
+      "round": 2
+    },
+    {
+      "timestamp": "2026-02-21T16:54:55.872869",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 12,
+      "reason": "deliberation_cost",
+      "round": 2
+    },
+    {
+      "timestamp": "2026-02-21T16:54:55.872906",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 44.5,
+      "reason": "pot_split",
+      "round": 2
+    },
+    {
+      "timestamp": "2026-02-21T16:54:55.872908",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 40.5,
+      "reason": "pot_split",
+      "round": 2
+    },
+    {
+      "timestamp": "2026-02-21T16:55:13.513450",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 14,
+      "reason": "generation_cost",
+      "round": 3
+    },
+    {
+      "timestamp": "2026-02-21T16:55:13.513461",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 17,
+      "reason": "generation_cost",
+      "round": 3
+    },
+    {
+      "timestamp": "2026-02-21T16:55:24.244369",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 19.190751445086708,
+      "reason": "initial_bounty",
+      "round": 3
+    },
+    {
+      "timestamp": "2026-02-21T16:55:24.244389",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 20.809248554913296,
+      "reason": "initial_bounty",
+      "round": 3
+    },
+    {
+      "timestamp": "2026-02-21T16:55:34.654469",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 6,
+      "reason": "deliberation_cost",
+      "round": 3
+    },
+    {
+      "timestamp": "2026-02-21T16:55:34.654479",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 6,
+      "reason": "deliberation_cost",
+      "round": 3
+    },
+    {
+      "timestamp": "2026-02-21T16:55:34.654507",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 40.78034682080925,
+      "reason": "pot_split",
+      "round": 3
+    },
+    {
+      "timestamp": "2026-02-21T16:55:34.654509",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 44.21965317919076,
+      "reason": "pot_split",
+      "round": 3
+    },
+    {
+      "timestamp": "2026-02-21T16:55:56.513885",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 17,
+      "reason": "generation_cost",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:55:56.513895",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 24,
+      "reason": "generation_cost",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:56:04.776394",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 20.401146131805163,
+      "reason": "initial_bounty",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:56:04.776404",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 19.598853868194844,
+      "reason": "initial_bounty",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:56:14.697852",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 4,
+      "reason": "deliberation_cost",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:56:14.697862",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 7,
+      "reason": "deliberation_cost",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:56:14.697891",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 15.0,
+      "reason": "bet_stake",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:56:14.697894",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 0.75,
+      "reason": "bet_fee",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:56:19.802471",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 6,
+      "reason": "generation_cost",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:56:22.941837",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1,
+      "reason": "summarization_cost",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:56:42.628880",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 4,
+      "reason": "deliberation_cost",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:56:42.628891",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 12,
+      "reason": "deliberation_cost",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:56:42.628923",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 51.0028653295129,
+      "reason": "pot_split",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:56:42.628925",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 48.99713467048711,
+      "reason": "pot_split",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:57:05.110050",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 24,
+      "reason": "generation_cost",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:57:05.110061",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 18,
+      "reason": "generation_cost",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:57:14.291626",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 20.552486187845304,
+      "reason": "initial_bounty",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:57:14.291636",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 19.447513812154696,
+      "reason": "initial_bounty",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:57:28.069098",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 12,
+      "reason": "deliberation_cost",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:57:28.069109",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 9,
+      "reason": "deliberation_cost",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:57:28.069133",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 43.67403314917127,
+      "reason": "pot_split",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:57:28.069135",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 41.32596685082873,
+      "reason": "pot_split",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:57:43.472646",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 12,
+      "reason": "generation_cost",
+      "round": 6
+    },
+    {
+      "timestamp": "2026-02-21T16:57:43.472656",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 13,
+      "reason": "generation_cost",
+      "round": 6
+    },
+    {
+      "timestamp": "2026-02-21T16:57:53.038476",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 20.39660056657224,
+      "reason": "initial_bounty",
+      "round": 6
+    },
+    {
+      "timestamp": "2026-02-21T16:57:53.038486",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 19.60339943342776,
+      "reason": "initial_bounty",
+      "round": 6
+    },
+    {
+      "timestamp": "2026-02-21T16:58:06.308535",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 12,
+      "reason": "deliberation_cost",
+      "round": 6
+    },
+    {
+      "timestamp": "2026-02-21T16:58:06.308546",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 7,
+      "reason": "deliberation_cost",
+      "round": 6
+    },
+    {
+      "timestamp": "2026-02-21T16:58:06.308574",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 43.342776203966004,
+      "reason": "pot_split",
+      "round": 6
+    },
+    {
+      "timestamp": "2026-02-21T16:58:06.308575",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 41.65722379603399,
+      "reason": "pot_split",
+      "round": 6
+    },
+    {
+      "timestamp": "2026-02-21T16:58:25.973459",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 20,
+      "reason": "generation_cost",
+      "round": 7
+    },
+    {
+      "timestamp": "2026-02-21T16:58:25.973470",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 15,
+      "reason": "generation_cost",
+      "round": 7
+    },
+    {
+      "timestamp": "2026-02-21T16:58:34.508366",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 20.39660056657224,
+      "reason": "initial_bounty",
+      "round": 7
+    },
+    {
+      "timestamp": "2026-02-21T16:58:34.508375",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 19.60339943342776,
+      "reason": "initial_bounty",
+      "round": 7
+    },
+    {
+      "timestamp": "2026-02-21T16:58:46.382426",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 9,
+      "reason": "deliberation_cost",
+      "round": 7
+    },
+    {
+      "timestamp": "2026-02-21T16:58:46.382436",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 7,
+      "reason": "deliberation_cost",
+      "round": 7
+    },
+    {
+      "timestamp": "2026-02-21T16:58:46.382463",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 43.342776203966004,
+      "reason": "pot_split",
+      "round": 7
+    },
+    {
+      "timestamp": "2026-02-21T16:58:46.382464",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 41.65722379603399,
+      "reason": "pot_split",
+      "round": 7
+    },
+    {
+      "timestamp": "2026-02-21T16:59:05.869858",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 18,
+      "reason": "generation_cost",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:59:05.869870",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 18,
+      "reason": "generation_cost",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:59:15.210274",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 19.190751445086708,
+      "reason": "initial_bounty",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:59:15.210283",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 20.809248554913296,
+      "reason": "initial_bounty",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:59:29.375945",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 9,
+      "reason": "deliberation_cost",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:59:29.375956",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 12,
+      "reason": "deliberation_cost",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:59:29.375985",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 40.78034682080925,
+      "reason": "pot_split",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:59:29.375987",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 44.21965317919076,
+      "reason": "pot_split",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:59:48.767697",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 14,
+      "reason": "generation_cost",
+      "round": 9
+    },
+    {
+      "timestamp": "2026-02-21T16:59:48.767708",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 21,
+      "reason": "generation_cost",
+      "round": 9
+    },
+    {
+      "timestamp": "2026-02-21T17:00:07.499274",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 18.863636363636363,
+      "reason": "initial_bounty",
+      "round": 9
+    },
+    {
+      "timestamp": "2026-02-21T17:00:07.499285",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 21.136363636363637,
+      "reason": "initial_bounty",
+      "round": 9
+    },
+    {
+      "timestamp": "2026-02-21T17:00:19.274307",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 11,
+      "reason": "deliberation_cost",
+      "round": 9
+    },
+    {
+      "timestamp": "2026-02-21T17:00:19.274319",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 5,
+      "reason": "deliberation_cost",
+      "round": 9
+    },
+    {
+      "timestamp": "2026-02-21T17:00:19.274351",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 40.08522727272727,
+      "reason": "pot_split",
+      "round": 9
+    },
+    {
+      "timestamp": "2026-02-21T17:00:19.274353",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 44.91477272727273,
+      "reason": "pot_split",
+      "round": 9
+    },
+    {
+      "timestamp": "2026-02-21T17:00:41.113723",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 25,
+      "reason": "generation_cost",
+      "round": 10
+    },
+    {
+      "timestamp": "2026-02-21T17:00:41.113734",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 17,
+      "reason": "generation_cost",
+      "round": 10
+    },
+    {
+      "timestamp": "2026-02-21T17:00:50.400398",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 19.718309859154928,
+      "reason": "initial_bounty",
+      "round": 10
+    },
+    {
+      "timestamp": "2026-02-21T17:00:50.400408",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 20.281690140845072,
+      "reason": "initial_bounty",
+      "round": 10
+    },
+    {
+      "timestamp": "2026-02-21T17:01:03.353906",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 7,
+      "reason": "deliberation_cost",
+      "round": 10
+    },
+    {
+      "timestamp": "2026-02-21T17:01:03.353920",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 12,
+      "reason": "deliberation_cost",
+      "round": 10
+    },
+    {
+      "timestamp": "2026-02-21T17:01:03.353957",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 41.901408450704224,
+      "reason": "pot_split",
+      "round": 10
+    },
+    {
+      "timestamp": "2026-02-21T17:01:03.353960",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 43.098591549295776,
+      "reason": "pot_split",
+      "round": 10
+    },
+    {
+      "timestamp": "2026-02-21T17:01:23.610041",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 18,
+      "reason": "generation_cost",
+      "round": 11
+    },
+    {
+      "timestamp": "2026-02-21T17:01:23.610054",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 19,
+      "reason": "generation_cost",
+      "round": 11
+    },
+    {
+      "timestamp": "2026-02-21T17:01:32.119473",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 20.22099447513812,
+      "reason": "initial_bounty",
+      "round": 11
+    },
+    {
+      "timestamp": "2026-02-21T17:01:32.119484",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 19.77900552486188,
+      "reason": "initial_bounty",
+      "round": 11
+    },
+    {
+      "timestamp": "2026-02-21T17:01:42.187717",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 5,
+      "reason": "deliberation_cost",
+      "round": 11
+    },
+    {
+      "timestamp": "2026-02-21T17:01:42.187728",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 6,
+      "reason": "deliberation_cost",
+      "round": 11
+    },
+    {
+      "timestamp": "2026-02-21T17:01:42.187756",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 42.969613259668506,
+      "reason": "pot_split",
+      "round": 11
+    },
+    {
+      "timestamp": "2026-02-21T17:01:42.187758",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 42.030386740331494,
+      "reason": "pot_split",
+      "round": 11
+    },
+    {
+      "timestamp": "2026-02-21T17:02:07.092401",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 22,
+      "reason": "generation_cost",
+      "round": 12
+    },
+    {
+      "timestamp": "2026-02-21T17:02:07.092412",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 27,
+      "reason": "generation_cost",
+      "round": 12
+    },
+    {
+      "timestamp": "2026-02-21T17:02:15.177808",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 20.217391304347828,
+      "reason": "initial_bounty",
+      "round": 12
+    },
+    {
+      "timestamp": "2026-02-21T17:02:15.177817",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 19.782608695652172,
+      "reason": "initial_bounty",
+      "round": 12
+    },
+    {
+      "timestamp": "2026-02-21T17:02:24.138840",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 4,
+      "reason": "deliberation_cost",
+      "round": 12
+    },
+    {
+      "timestamp": "2026-02-21T17:02:24.138850",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 5,
+      "reason": "deliberation_cost",
+      "round": 12
+    },
+    {
+      "timestamp": "2026-02-21T17:02:24.138874",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 42.96195652173913,
+      "reason": "pot_split",
+      "round": 12
+    },
+    {
+      "timestamp": "2026-02-21T17:02:24.138876",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 42.03804347826087,
+      "reason": "pot_split",
+      "round": 12
+    },
+    {
+      "timestamp": "2026-02-21T17:02:44.611410",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 21,
+      "reason": "generation_cost",
+      "round": 13
+    },
+    {
+      "timestamp": "2026-02-21T17:02:44.611421",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 17,
+      "reason": "generation_cost",
+      "round": 13
+    },
+    {
+      "timestamp": "2026-02-21T17:02:52.489544",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 20.773480662983424,
+      "reason": "initial_bounty",
+      "round": 13
+    },
+    {
+      "timestamp": "2026-02-21T17:02:52.489555",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 19.226519337016576,
+      "reason": "initial_bounty",
+      "round": 13
+    },
+    {
+      "timestamp": "2026-02-21T17:03:03.750622",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 8,
+      "reason": "deliberation_cost",
+      "round": 13
+    },
+    {
+      "timestamp": "2026-02-21T17:03:03.750632",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 7,
+      "reason": "deliberation_cost",
+      "round": 13
+    },
+    {
+      "timestamp": "2026-02-21T17:03:03.750655",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 44.14364640883978,
+      "reason": "pot_split",
+      "round": 13
+    },
+    {
+      "timestamp": "2026-02-21T17:03:03.750657",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 40.85635359116022,
+      "reason": "pot_split",
+      "round": 13
+    },
+    {
+      "timestamp": "2026-02-21T17:03:23.867406",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 19,
+      "reason": "generation_cost",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T17:03:23.867417",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 18,
+      "reason": "generation_cost",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T17:03:33.539858",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 20.773480662983424,
+      "reason": "initial_bounty",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T17:03:33.539868",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 19.226519337016576,
+      "reason": "initial_bounty",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T17:03:47.662512",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 9,
+      "reason": "deliberation_cost",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T17:03:47.662522",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 12,
+      "reason": "deliberation_cost",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T17:03:47.662550",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 44.14364640883978,
+      "reason": "pot_split",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T17:03:47.662552",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 40.85635359116022,
+      "reason": "pot_split",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T17:04:06.992154",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 17,
+      "reason": "generation_cost",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T17:04:06.992164",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 18,
+      "reason": "generation_cost",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T17:04:15.511701",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 20.401146131805163,
+      "reason": "initial_bounty",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T17:04:15.511712",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 19.598853868194844,
+      "reason": "initial_bounty",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T17:04:25.497925",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 5,
+      "reason": "deliberation_cost",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T17:04:25.497936",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 7,
+      "reason": "deliberation_cost",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T17:04:25.497968",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 20,
+      "reason": "bet_stake",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T17:04:25.497970",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1.0,
+      "reason": "bet_fee",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T17:04:30.731745",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 6,
+      "reason": "generation_cost",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T17:04:33.880806",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1,
+      "reason": "summarization_cost",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T17:04:52.587929",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 5,
+      "reason": "deliberation_cost",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T17:04:52.587939",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 4,
+      "reason": "deliberation_cost",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T17:04:52.587963",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 53.07065217391305,
+      "reason": "pot_split",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T17:04:52.587965",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 51.92934782608695,
+      "reason": "pot_split",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T17:05:17.719670",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 26,
+      "reason": "generation_cost",
+      "round": 16
+    },
+    {
+      "timestamp": "2026-02-21T17:05:17.719680",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 24,
+      "reason": "generation_cost",
+      "round": 16
+    },
+    {
+      "timestamp": "2026-02-21T17:05:26.350815",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 20.39660056657224,
+      "reason": "initial_bounty",
+      "round": 16
+    },
+    {
+      "timestamp": "2026-02-21T17:05:26.350842",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 19.60339943342776,
+      "reason": "initial_bounty",
+      "round": 16
+    },
+    {
+      "timestamp": "2026-02-21T17:05:37.453797",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "deliberation_cost",
+      "round": 16
+    },
+    {
+      "timestamp": "2026-02-21T17:05:37.453807",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 5,
+      "reason": "deliberation_cost",
+      "round": 16
+    },
+    {
+      "timestamp": "2026-02-21T17:05:37.453833",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 43.342776203966004,
+      "reason": "pot_split",
+      "round": 16
+    },
+    {
+      "timestamp": "2026-02-21T17:05:37.453835",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 41.65722379603399,
+      "reason": "pot_split",
+      "round": 16
+    }
+  ]
+}

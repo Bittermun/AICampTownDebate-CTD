@@ -10,6 +10,16 @@ Score each debater 0.0-1.0 on:
 2. RESPONSIVENESS: Whether the argument directly addresses opponent claims
 3. DEVELOPMENT: Whether the argument improves or updates prior claims
 
+Scoring calibration:
+- 0.8+ = Exceptional. Strong evidence, directly addresses opponent, clear refinement.
+- 0.5-0.7 = Adequate. Makes valid points but generic or unsupported.
+- 0.2-0.4 = Weak. Vague, off-topic, or fails to engage with opponent.
+- 0.0-0.1 = Missing. No substantive content on this dimension.
+
+IMPORTANT: Use the full scale. A score of 0.5 for both sides means
+you found NO meaningful difference. If one argument is clearly
+stronger, reflect that with at least a 0.2 gap.
+
 Scoring rules:
 - Score only from text provided. Do not assume external facts not mentioned.
 - If evidence is weak for both sides, keep scores closer together.

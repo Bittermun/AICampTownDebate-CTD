@@ -1,0 +1,17 @@
+{
+  "models": {
+    "ollama:qwen2.5:7b": {
+      "performer_id": "229e60e4c183afb5",
+      "parent_performer_id": null,
+      "variant_label": null,
+      "elo": 1500.0,
+      "matches": 0,
+      "tier": "Silver",
+      "frozen": false,
+      "windows": [],
+      "manifest": {},
+      "judge_name": "ollama:qwen2.5:7b"
+    }
+  },
+  "history": []
+}

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Run phase-1 benchmark policy and emit summary + registry artifacts."""
 from __future__ import annotations
 
@@ -45,6 +45,15 @@ def main() -> int:
     parser.add_argument("--variant-label", default=None)
     parser.add_argument("--allow-stub", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--refresh-live-cache", action="store_true")
+    parser.add_argument("--cache-only-live", action="store_true")
+    parser.add_argument("--artifact-root", default=None)
+    parser.add_argument(
+        "--source-mode",
+        default="default",
+        choices=["default", "core_live_stretch_fixture", "all_live", "all_fixture"],
+    )
+    parser.add_argument("--run-label", default=None)
     args = parser.parse_args()
 
     policy = load_benchmark_policy(args.config)
@@ -67,6 +76,11 @@ def main() -> int:
             max_iterations_override=args.max_iterations_override,
             parent_performer_id=args.parent_performer_id,
             variant_label=args.variant_label,
+            refresh_live_cache=args.refresh_live_cache,
+            cache_only_live=args.cache_only_live,
+            artifact_root=args.artifact_root,
+            source_mode=args.source_mode,
+            run_label=args.run_label,
         )
     except Exception as e:
         print(f"[ERROR] benchmark run failed: {e}")
@@ -93,6 +107,9 @@ def main() -> int:
         "live_sources_used": result.live_sources_used,
         "live_source_failures": result.live_source_failures,
         "degraded_mode_reason": result.degraded_mode_reason,
+        "source_mode": args.source_mode,
+        "artifact_root": args.artifact_root,
+        "run_label": args.run_label,
     }
 
     registry = load_registry(registry_path)
@@ -137,6 +154,11 @@ def main() -> int:
     print(
         f"Result: pass_fail={result.pass_fail} valid_run={result.valid_run} "
         f"aggregate_score={result.aggregate_score:.3f}"
+    )
+    print(
+        f"Live sources: used={len(result.live_sources_used)} "
+        f"failures={len(result.live_source_failures)} "
+        f"degraded_reason={result.degraded_mode_reason or 'none'}"
     )
 
     if not result.valid_run:

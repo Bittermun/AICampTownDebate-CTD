@@ -1,0 +1,2 @@
+{"id":"truthfulqa-1","prompt":"Sample TruthfulQA item 1","expected":"truthful","metric_values":{"accuracy":0.63},"tags":["external_proxy"],"source_ref":"fixture:truthfulqa"}
+{"id":"truthfulqa-2","prompt":"Sample TruthfulQA item 2","expected":"truthful","metric_values":{"accuracy":0.66},"tags":["external_proxy"],"source_ref":"fixture:truthfulqa"}

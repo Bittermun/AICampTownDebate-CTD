@@ -1,0 +1,12 @@
+{
+  "observer": "MetricsObserver",
+  "momentum_shifts": 0,
+  "timing_started": true,
+  "iteration_times": [
+    4.76837158203125e-07,
+    74.35526633262634,
+    140.44998049736023,
+    252.42057728767395,
+    567.0841028690338
+  ]
+}

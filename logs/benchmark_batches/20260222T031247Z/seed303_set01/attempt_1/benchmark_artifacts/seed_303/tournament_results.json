@@ -1,0 +1,157 @@
+{
+  "config": {
+    "num_rounds": 16,
+    "initial_balance": 420,
+    "max_debt": 105
+  },
+  "rounds": [
+    {
+      "round_id": 1,
+      "topic": "Does increasing the number of parameters always improve an LLM's factual accuracy?",
+      "confidence_a": 0.47976878612716767,
+      "confidence_b": 0.5202312138728324,
+      "tokens_a": 59.97109826589596,
+      "tokens_b": 65.02890173410405,
+      "bets": 0
+    },
+    {
+      "round_id": 2,
+      "topic": "Is Reinforcement Learning from Human Feedback (RLHF) primarily a truth-seeking or a style-matching technique?",
+      "confidence_a": 0.5189504373177842,
+      "confidence_b": 0.4810495626822157,
+      "tokens_a": 64.86880466472303,
+      "tokens_b": 60.13119533527697,
+      "bets": 0
+    },
+    {
+      "round_id": 3,
+      "topic": "Do current LLMs possess internal world models or only pattern matching behavior?",
+      "confidence_a": 0.5102639296187683,
+      "confidence_b": 0.4897360703812316,
+      "tokens_a": 63.78299120234604,
+      "tokens_b": 61.21700879765395,
+      "bets": 0
+    },
+    {
+      "round_id": 4,
+      "topic": "Can a sufficiently advanced AI simulate human subjective experience?",
+      "confidence_a": 0.510028653295129,
+      "confidence_b": 0.4899713467048711,
+      "tokens_a": 69.86650169314926,
+      "tokens_b": 70.13349830685074,
+      "bets": 1
+    },
+    {
+      "round_id": 5,
+      "topic": "Are scaling laws sufficient to reach AGI without architectural breakthroughs?",
+      "confidence_a": 0.49700598802395207,
+      "confidence_b": 0.5029940119760479,
+      "tokens_a": 62.125748502994014,
+      "tokens_b": 62.874251497005986,
+      "bets": 0
+    },
+    {
+      "round_id": 6,
+      "topic": "Is chain-of-thought prompting surfacing latent knowledge or adding new computation?",
+      "confidence_a": 0.47976878612716767,
+      "confidence_b": 0.5202312138728324,
+      "tokens_a": 59.97109826589596,
+      "tokens_b": 65.02890173410405,
+      "bets": 0
+    },
+    {
+      "round_id": 7,
+      "topic": "Do hallucinations imply a fundamental transformer limitation?",
+      "confidence_a": 0.49714285714285716,
+      "confidence_b": 0.5028571428571429,
+      "tokens_a": 68.90503715937243,
+      "tokens_b": 71.09496284062759,
+      "bets": 1
+    },
+    {
+      "round_id": 8,
+      "topic": "Is AI safety research more urgent than capabilities research?",
+      "confidence_a": 0.510028653295129,
+      "confidence_b": 0.489971346704871,
+      "tokens_a": 72.41664495962492,
+      "tokens_b": 72.5833550403751,
+      "bets": 1
+    },
+    {
+      "round_id": 9,
+      "topic": "Does increasing the number of parameters always improve an LLM's factual accuracy?",
+      "confidence_a": 0.49214659685863876,
+      "confidence_b": 0.5078534031413613,
+      "tokens_a": 61.518324607329845,
+      "tokens_b": 63.48167539267016,
+      "bets": 0
+    },
+    {
+      "round_id": 10,
+      "topic": "Is Reinforcement Learning from Human Feedback (RLHF) primarily a truth-seeking or a style-matching technique?",
+      "confidence_a": 0.4879518072289157,
+      "confidence_b": 0.5120481927710844,
+      "tokens_a": 69.35697847570056,
+      "tokens_b": 70.64302152429944,
+      "bets": 1
+    },
+    {
+      "round_id": 11,
+      "topic": "Do current LLMs possess internal world models or only pattern matching behavior?",
+      "confidence_a": 0.49275362318840576,
+      "confidence_b": 0.5072463768115942,
+      "tokens_a": 61.59420289855072,
+      "tokens_b": 63.40579710144928,
+      "bets": 0
+    },
+    {
+      "round_id": 12,
+      "topic": "Can a sufficiently advanced AI simulate human subjective experience?",
+      "confidence_a": 0.494475138121547,
+      "confidence_b": 0.505524861878453,
+      "tokens_a": 68.6382652572414,
+      "tokens_b": 71.3617347427586,
+      "bets": 1
+    },
+    {
+      "round_id": 13,
+      "topic": "Are scaling laws sufficient to reach AGI without architectural breakthroughs?",
+      "confidence_a": 0.5013698630136986,
+      "confidence_b": 0.4986301369863013,
+      "tokens_a": 62.67123287671234,
+      "tokens_b": 62.328767123287676,
+      "bets": 0
+    },
+    {
+      "round_id": 14,
+      "topic": "Is chain-of-thought prompting surfacing latent knowledge or adding new computation?",
+      "confidence_a": 0.48022598870056493,
+      "confidence_b": 0.5197740112994351,
+      "tokens_a": 67.89208324393906,
+      "tokens_b": 77.10791675606094,
+      "bets": 1
+    },
+    {
+      "round_id": 15,
+      "topic": "Do hallucinations imply a fundamental transformer limitation?",
+      "confidence_a": 0.4985835694050991,
+      "confidence_b": 0.5014164305949008,
+      "tokens_a": 62.3229461756374,
+      "tokens_b": 62.6770538243626,
+      "bets": 0
+    },
+    {
+      "round_id": 16,
+      "topic": "Is AI safety research more urgent than capabilities research?",
+      "confidence_a": 0.5555555555555556,
+      "confidence_b": 0.4444444444444445,
+      "tokens_a": 69.44444444444444,
+      "tokens_b": 55.55555555555556,
+      "bets": 0
+    }
+  ],
+  "final_balances": {
+    "Debater_Alpha": 932.5964026935573,
+    "Debater_Beta": 831.4035973064427
+  }
+}

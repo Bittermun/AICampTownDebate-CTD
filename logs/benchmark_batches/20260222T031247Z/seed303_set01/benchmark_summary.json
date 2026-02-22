@@ -1,0 +1,277 @@
+{
+  "benchmark_id": "phase1_truth_reasoning_2026q1",
+  "model_name": "ollama:qwen2.5:7b",
+  "judge_name": "ollama:qwen2.5:7b",
+  "seed_results": [
+    {
+      "seed": 303,
+      "aggregate_score": 0.594811,
+      "pass_benchmark": false,
+      "benchmark_score_pass": false,
+      "gates_pass": true,
+      "trajectory_pass": true,
+      "valid_run": true,
+      "validity_issues": [],
+      "accounting_drift_abs": 0.0,
+      "accounting_ok": true,
+      "accounting_notes": [],
+      "gates": [
+        {
+          "name": "judge_variance",
+          "passed": true,
+          "details": {
+            "mean_confidence_a": 0.8333544091431868,
+            "stdev_confidence_a": 0.03165259647541475,
+            "runs": 10
+          }
+        },
+        {
+          "name": "judge_calibration",
+          "passed": true,
+          "details": {
+            "pass_rate": 1.0,
+            "passed_cases": 3,
+            "total_cases": 3
+          }
+        }
+      ],
+      "group_results": {
+        "truth_core_core": {
+          "score": 0.63,
+          "metric_means": {
+            "accuracy": 0.63
+          },
+          "metric_means_raw": {
+            "accuracy": 0.63
+          },
+          "metric_means_transformed": {
+            "accuracy": 0.63
+          },
+          "pass_group": true,
+          "reasons": [
+            "truth_core_core/MMLU-Pro: fixture-backed external dataset",
+            "truth_core_core/TruthfulQA: fixture-backed external dataset"
+          ],
+          "item_count": 5,
+          "degraded_mode": true
+        },
+        "truth_core_stretch": {
+          "score": 0.6,
+          "metric_means": {
+            "accuracy": 0.6
+          },
+          "metric_means_raw": {
+            "accuracy": 0.6
+          },
+          "metric_means_transformed": {
+            "accuracy": 0.6
+          },
+          "pass_group": true,
+          "reasons": [
+            "truth_core_stretch/GPQA: fixture-backed external dataset"
+          ],
+          "item_count": 2,
+          "degraded_mode": true
+        },
+        "reasoning_core": {
+          "score": 0.586667,
+          "metric_means": {
+            "task_accuracy": 0.583333,
+            "evidence_grounding": 0.59
+          },
+          "metric_means_raw": {
+            "task_accuracy": 0.583333,
+            "evidence_grounding": 0.59
+          },
+          "metric_means_transformed": {
+            "task_accuracy": 0.583333,
+            "evidence_grounding": 0.59
+          },
+          "pass_group": true,
+          "reasons": [
+            "reasoning_core/GSM8K: fixture-backed external dataset",
+            "reasoning_core/HotpotQA: fixture-backed external dataset",
+            "reasoning_core/FEVER: fixture-backed external dataset"
+          ],
+          "item_count": 6,
+          "degraded_mode": true
+        },
+        "adversarial_robustness": {
+          "score": 0.62625,
+          "metric_means": {
+            "symmetry_consistency": 0.6175,
+            "trap_rejection_rate": 0.635
+          },
+          "metric_means_raw": {
+            "symmetry_consistency": 0.6175,
+            "trap_rejection_rate": 0.635
+          },
+          "metric_means_transformed": {
+            "symmetry_consistency": 0.6175,
+            "trap_rejection_rate": 0.635
+          },
+          "pass_group": true,
+          "reasons": [],
+          "item_count": 4,
+          "degraded_mode": false
+        },
+        "economy_adaptation": {
+          "score": 0.518472,
+          "metric_means": {
+            "net_roi": 0.46375,
+            "adaptation_gain_after_loss": 0.516667,
+            "selection_health_score": 0.575
+          },
+          "metric_means_raw": {
+            "net_roi": -0.0725,
+            "adaptation_gain_after_loss": 0.0275,
+            "selection_health_score": 0.575
+          },
+          "metric_means_transformed": {
+            "net_roi": 0.46375,
+            "adaptation_gain_after_loss": 0.516667,
+            "selection_health_score": 0.575
+          },
+          "pass_group": true,
+          "reasons": [],
+          "item_count": 4,
+          "degraded_mode": false
+        }
+      },
+      "artifact_paths": {
+        "results_json": "logs\\benchmark_batches\\20260222T031247Z\\seed303_set01\\attempt_1\\benchmark_artifacts\\seed_303\\tournament_results.json",
+        "transcript_json": "logs\\benchmark_batches\\20260222T031247Z\\seed303_set01\\attempt_1\\benchmark_artifacts\\seed_303\\tournament_results_transcript.json",
+        "ledger_json": "logs\\benchmark_batches\\20260222T031247Z\\seed303_set01\\attempt_1\\benchmark_artifacts\\seed_303\\tournament_results_ledger.json",
+        "selection_health_json": "logs\\benchmark_batches\\20260222T031247Z\\seed303_set01\\attempt_1\\benchmark_artifacts\\seed_303\\selection_health_dashboard.json"
+      },
+      "artifact_manifest": {
+        "results_json": {
+          "path": "logs\\benchmark_batches\\20260222T031247Z\\seed303_set01\\attempt_1\\benchmark_artifacts\\seed_303\\tournament_results.json",
+          "sha256": "4c3d6059d7fc8863d146a59ffae5517c9923dc1bdc25636ef119e35e2931caea"
+        },
+        "transcript_json": {
+          "path": "logs\\benchmark_batches\\20260222T031247Z\\seed303_set01\\attempt_1\\benchmark_artifacts\\seed_303\\tournament_results_transcript.json",
+          "sha256": "499e97c8e60b890b8359eab5b00e80d8f5e2aae807bc571f9a109f147f025afc"
+        },
+        "ledger_json": {
+          "path": "logs\\benchmark_batches\\20260222T031247Z\\seed303_set01\\attempt_1\\benchmark_artifacts\\seed_303\\tournament_results_ledger.json",
+          "sha256": "4a489bc0665d45e594a5f0893cef1cc5c92869ded531140c0ef1037aae151e1b"
+        },
+        "selection_health_json": {
+          "path": "logs\\benchmark_batches\\20260222T031247Z\\seed303_set01\\attempt_1\\benchmark_artifacts\\seed_303\\selection_health_dashboard.json",
+          "sha256": "78bdfae61d7cd2b2a1bc610594356e1e4dc730ac880c5c06c4bf39b3001414b4"
+        }
+      },
+      "trajectory_checks": {
+        "enabled": true,
+        "rounds": 16,
+        "pass_rate_early": 0.863636,
+        "pass_rate_late": 0.863636,
+        "pass_shift": 0.0,
+        "aggression_rate_early": 0.136364,
+        "aggression_rate_late": 0.136364,
+        "aggression_shift": 0.0,
+        "judge_score_entropy_bits": 3.2806,
+        "adaptation_gain_after_loss": 0.0132,
+        "mutual_pass_round_rate": 1.0,
+        "pass_rate": 0.8636
+      }
+    }
+  ],
+  "group_scores": {
+    "truth_core_core": 0.63,
+    "truth_core_stretch": 0.6,
+    "reasoning_core": 0.586667,
+    "adversarial_robustness": 0.62625,
+    "economy_adaptation": 0.518472
+  },
+  "aggregate_score": 0.594811,
+  "benchmark_score_pass": false,
+  "gates_pass": true,
+  "validity_pass": true,
+  "final_pass": false,
+  "pass_fail": "fail",
+  "valid_run": true,
+  "validity_issues": [],
+  "gate_summary": {
+    "aggregate_benchmark_pass": false,
+    "stability_pass": true,
+    "directional_consistency": true,
+    "aggregate_score_stdev": 0.0,
+    "gates_pass": true,
+    "benchmark_score_pass": false,
+    "validity_pass": true,
+    "final_pass": false,
+    "mean_accounting_drift_abs": 0.0,
+    "max_accounting_drift_abs": 0.0
+  },
+  "trajectory_summary": {
+    "seeds": 1,
+    "mean_pass_shift": 0.0,
+    "mean_aggression_shift": 0.0,
+    "mean_entropy_bits": 3.2806,
+    "mean_adaptation_gain_after_loss": 0.0132
+  },
+  "degraded_mode": true,
+  "live_sources_used": [],
+  "live_source_failures": [],
+  "degraded_mode_reason": "fixture-backed datasets in benchmark policy",
+  "elo_before_after": {
+    "before": 1500.0,
+    "after": 1500.0
+  },
+  "tier_before_after": {
+    "before": "Silver",
+    "after": "Silver"
+  },
+  "artifact_paths": {
+    "results_json": "logs\\benchmark_batches\\20260222T031247Z\\seed303_set01\\attempt_1\\benchmark_summary.json",
+    "champion_registry": "logs\\benchmark_batches\\20260222T031247Z\\seed303_set01\\attempt_1\\champion_registry.json"
+  },
+  "run_metadata": {
+    "run_id": "20260222T034432Z",
+    "run_label": "seed303_set01_attempt1",
+    "performer_id": "229e60e4c183afb5",
+    "parent_performer_id": null,
+    "variant_label": null,
+    "policy_hash": "c35f164ab4020a33",
+    "tournament_config_hash": "80f4c7cdf86a3c72",
+    "seed_set": [
+      303
+    ],
+    "num_rounds": 16,
+    "max_iterations": 5,
+    "model_id": "ollama:qwen2.5:7b",
+    "judge_model_id": "ollama:qwen2.5:7b",
+    "prompt_hashes": {
+      "debater_a_system_prompt_hash": "e3b0c44298fc1c14",
+      "debater_b_system_prompt_hash": "e3b0c44298fc1c14",
+      "judge_system_prompt_hash": "e3b0c44298fc1c14"
+    },
+    "runtime_fingerprint": {
+      "python_version": "3.14.0",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "model_backend": "ollama",
+      "judge_backend": "ollama",
+      "strict_runtime": true,
+      "allow_stub": false,
+      "source_mode": "all_fixture",
+      "artifact_root": "logs\\benchmark_batches\\20260222T031247Z\\seed303_set01\\attempt_1"
+    },
+    "artifact_manifest": {
+      "summary_json": {
+        "path": "logs\\benchmark_batches\\20260222T031247Z\\seed303_set01\\attempt_1\\benchmark_summary.json",
+        "sha256": "6e6a80188fcbfa5a1c52b3a4a4d2fc157851fdc1f658a16f87c932d0a8c68c58"
+      },
+      "registry_json": {
+        "path": "logs\\benchmark_batches\\20260222T031247Z\\seed303_set01\\attempt_1\\champion_registry.json",
+        "sha256": "85d6e98ea732433cf6e372c563e8332c965c623b6b385ff4505ba9b41c0b63ed"
+      },
+      "live_dataset_pulls": []
+    }
+  },
+  "notes": [
+    "metadata_hash=0982ef4ead048d8a",
+    "Registry not updated (requires valid_run && passed)."
+  ]
+}

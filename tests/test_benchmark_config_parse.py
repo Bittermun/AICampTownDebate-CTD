@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Tests for benchmark policy config parsing."""
 from pathlib import Path
 import sys
@@ -13,11 +13,18 @@ def test_load_valid_policy():
     policy = load_benchmark_policy("configs/benchmark_phase1.yaml")
     assert policy.meta.benchmark_id == "phase1_truth_reasoning_2026q1"
     assert policy.runtime.judge_gates.variance.runs == 10
-    assert "truth_core" in policy.benchmark_groups
+    assert "truth_core_core" in policy.benchmark_groups
+    assert "truth_core_stretch" in policy.benchmark_groups
     assert "net_roi" in policy.benchmark_groups["economy_adaptation"].metric_transforms
     assert policy.trajectory_checks.enabled is True
     assert policy.runtime.allow_live_source_fallback is True
-    assert policy.benchmark_groups["truth_core"].datasets[0].hf_dataset_id == "TIGER-Lab/MMLU-Pro"
+    assert policy.benchmark_groups["truth_core_core"].datasets[0].hf_dataset_id == "TIGER-Lab/MMLU-Pro"
+
+
+def test_non_blocking_group_parse():
+    policy = load_benchmark_policy("configs/benchmark_phase1.yaml")
+    assert policy.benchmark_groups["truth_core_core"].blocking is True
+    assert policy.benchmark_groups["truth_core_stretch"].blocking is False
 
 
 def test_missing_required_field_raises():
@@ -38,5 +45,6 @@ runtime:
 
 if __name__ == "__main__":
     test_load_valid_policy()
+    test_non_blocking_group_parse()
     test_missing_required_field_raises()
     print("test_benchmark_config_parse: PASS")

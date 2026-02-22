@@ -24,7 +24,7 @@ models:
 economy:
   initial_balance: 420
   max_debt: 105
-  tokens_per_round: 85
+  tokens_per_round: 60
   split_pot_enabled: true
   initial_pot_amount: 40
 

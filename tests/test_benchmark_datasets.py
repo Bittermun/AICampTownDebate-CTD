@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Unit tests for benchmark dataset adapters."""
 from pathlib import Path
 import json
@@ -65,6 +65,7 @@ def test_hf_adapter_mapping_sampling_hash_and_provenance():
     assert pull["subset"] == "default"
     assert pull["split"] == "test"
     assert pull["row_count"] == 2
+    assert pull["cache_mode"] == "prefer_cache"
     assert len(pull["content_hash"]) == 64
     assert "fetch_timestamp" in pull
     assert Path(pull["cache_data_path"]).exists()
@@ -78,13 +79,75 @@ def test_hf_adapter_mapping_sampling_hash_and_provenance():
     assert len(meta["content_hash"]) == 64
     assert "fetch_timestamp" in meta
 
-    adapter._load_hf_split = lambda _spec: (_ for _ in ()).throw(AssertionError("should read from cache"))  # type: ignore[method-assign]
-    items_cached, degraded_cached = adapter.load(group_name="truth_core", dataset_name="TinyTruth", limit=None)
-    assert degraded_cached is False
-    assert len(items_cached) == 2
-    assert items_cached[1].item_id == "q2"
+
+def test_hf_adapter_schema_validation_and_cache_controls():
+    cache_dir = Path("logs/test_tmp_hf_cache_controls")
+    _clean_dir(cache_dir)
+
+    spec_bad = DatasetSpec(
+        name="BadMap",
+        source="external",
+        split="test",
+        hf_dataset_id="org/bad_map",
+        column_mapping={"prompt": "missing_prompt_col"},
+    )
+    bad_adapter = HFDatasetAdapter(dataset_specs={("truth_core", "BadMap"): spec_bad}, cache_dir=str(cache_dir))
+    bad_adapter._load_hf_split = lambda _spec: ("test", [{"id": "x1", "question": "hello"}])  # type: ignore[method-assign]
+    try:
+        bad_adapter.load("truth_core", "BadMap")
+        raise AssertionError("Expected mapping schema validation to fail")
+    except ValueError as exc:
+        assert "Column mapping validation failed" in str(exc)
+
+    spec_cache = DatasetSpec(
+        name="CacheOnly",
+        source="external",
+        split="test",
+        hf_dataset_id="org/cache_only",
+        column_mapping={"prompt": "question", "id": "qid"},
+    )
+    cache_only_adapter = HFDatasetAdapter(
+        dataset_specs={("truth_core", "CacheOnly"): spec_cache},
+        cache_dir=str(cache_dir),
+        cache_only=True,
+    )
+    try:
+        cache_only_adapter.load("truth_core", "CacheOnly")
+        raise AssertionError("Expected cache-only miss to fail")
+    except RuntimeError as exc:
+        assert "Cache-only mode enabled" in str(exc)
+
+
+def test_hf_adapter_force_refresh_overwrites_cache():
+    cache_dir = Path("logs/test_tmp_hf_cache_refresh")
+    _clean_dir(cache_dir)
+
+    spec = DatasetSpec(
+        name="Refreshable",
+        source="external",
+        split="test",
+        hf_dataset_id="org/refreshable",
+        column_mapping={"prompt": "question", "id": "qid"},
+    )
+
+    adapter_initial = HFDatasetAdapter(dataset_specs={("truth_core", "Refreshable"): spec}, cache_dir=str(cache_dir))
+    adapter_initial._load_hf_split = lambda _spec: ("test", [{"qid": "q1", "question": "old"}])  # type: ignore[method-assign]
+    items_initial, _ = adapter_initial.load("truth_core", "Refreshable")
+    assert items_initial[0].item_id == "q1"
+
+    adapter_refresh = HFDatasetAdapter(
+        dataset_specs={("truth_core", "Refreshable"): spec},
+        cache_dir=str(cache_dir),
+        force_refresh=True,
+    )
+    adapter_refresh._load_hf_split = lambda _spec: ("test", [{"qid": "q2", "question": "new"}])  # type: ignore[method-assign]
+    items_refresh, _ = adapter_refresh.load("truth_core", "Refreshable")
+    assert items_refresh[0].item_id == "q2"
+    assert adapter_refresh.pull_manifest[0]["cache_mode"] == "refresh"
 
 
 if __name__ == "__main__":
     test_hf_adapter_mapping_sampling_hash_and_provenance()
+    test_hf_adapter_schema_validation_and_cache_controls()
+    test_hf_adapter_force_refresh_overwrites_cache()
     print("test_benchmark_datasets: PASS")

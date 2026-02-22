@@ -1,0 +1,1458 @@
+{
+  "initial_balance": 420,
+  "max_debt": 105,
+  "balances": {
+    "Debater_Alpha": 1438.6111111111109,
+    "Debater_Beta": 1359.7222222222222
+  },
+  "transactions": [
+    {
+      "timestamp": "2026-02-21T16:05:21.962032",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 420,
+      "reason": "initial_balance",
+      "round": 0
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.962051",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 420,
+      "reason": "initial_balance",
+      "round": 0
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.962217",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 18.000000000000004,
+      "reason": "initial_bounty",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.962221",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 22.0,
+      "reason": "initial_bounty",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.962255",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.962259",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 0.5,
+      "reason": "bet_fee",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.962345",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.962348",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1.0,
+      "reason": "bet_fee",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.962409",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.962411",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 1.5000000000000002,
+      "reason": "bet_fee",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.962461",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 63.25000000000001,
+      "reason": "pot_split",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.962463",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 51.75000000000001,
+      "reason": "pot_split",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.962472",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 12.222222222222221,
+      "reason": "bet_won:BET-0002",
+      "round": 1
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.962879",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 22.0,
+      "reason": "initial_bounty",
+      "round": 2
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.962889",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 18.000000000000004,
+      "reason": "initial_bounty",
+      "round": 2
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.962959",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 2
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.962966",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 0.5,
+      "reason": "bet_fee",
+      "round": 2
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.963081",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 2
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.963084",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 1.0,
+      "reason": "bet_fee",
+      "round": 2
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.963156",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 2
+    },
+    {
+      "timestamp": "2026-02-21T16:05:21.963158",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1.5000000000000002,
+      "reason": "bet_fee",
+      "round": 2
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.520406",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 7,
+      "reason": "search_tool_cost",
+      "round": 2
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.520595",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 63.25000000000001,
+      "reason": "pot_split",
+      "round": 2
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.520598",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 51.75000000000001,
+      "reason": "pot_split",
+      "round": 2
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.520755",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 18.000000000000004,
+      "reason": "initial_bounty",
+      "round": 3
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.520758",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 22.0,
+      "reason": "initial_bounty",
+      "round": 3
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.520778",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 3
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.520780",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 0.5,
+      "reason": "bet_fee",
+      "round": 3
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.520838",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 3
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.520840",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1.0,
+      "reason": "bet_fee",
+      "round": 3
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.520885",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 3
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.520887",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 1.5000000000000002,
+      "reason": "bet_fee",
+      "round": 3
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.521024",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 63.25000000000001,
+      "reason": "pot_split",
+      "round": 3
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.521029",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 51.75000000000001,
+      "reason": "pot_split",
+      "round": 3
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.521036",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 12.222222222222221,
+      "reason": "bet_won:BET-0008",
+      "round": 3
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.521129",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 18.000000000000004,
+      "reason": "initial_bounty",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.521131",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 22.0,
+      "reason": "initial_bounty",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.521146",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.521148",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 0.5,
+      "reason": "bet_fee",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.556580",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 5,
+      "reason": "search_tool_cost",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.556858",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.556864",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 1.0,
+      "reason": "bet_fee",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.556997",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.557001",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1.5000000000000002,
+      "reason": "bet_fee",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.561345",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 5,
+      "reason": "search_tool_cost",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.561503",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 63.25000000000001,
+      "reason": "pot_split",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.561510",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 51.75000000000001,
+      "reason": "pot_split",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.561522",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 12.222222222222221,
+      "reason": "bet_won:BET-0012",
+      "round": 4
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.561735",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 18.000000000000004,
+      "reason": "initial_bounty",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.561739",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 22.0,
+      "reason": "initial_bounty",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.561769",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.561772",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 0.5,
+      "reason": "bet_fee",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.564420",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 5,
+      "reason": "search_tool_cost",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.564526",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.564528",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1.0,
+      "reason": "bet_fee",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.564586",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.564588",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1.5000000000000002,
+      "reason": "bet_fee",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.564655",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 63.25000000000001,
+      "reason": "pot_split",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.564657",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 51.75000000000001,
+      "reason": "pot_split",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.564665",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 12.222222222222221,
+      "reason": "bet_won:BET-0014",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.564667",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 12.222222222222221,
+      "reason": "bet_won:BET-0015",
+      "round": 5
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.564781",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 18.000000000000004,
+      "reason": "initial_bounty",
+      "round": 6
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.564783",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 22.0,
+      "reason": "initial_bounty",
+      "round": 6
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.564805",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 6
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.564807",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 0.5,
+      "reason": "bet_fee",
+      "round": 6
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.564854",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 6
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.564856",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1.0,
+      "reason": "bet_fee",
+      "round": 6
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.564899",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 6
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.564901",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 1.5000000000000002,
+      "reason": "bet_fee",
+      "round": 6
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.565003",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 51.75000000000001,
+      "reason": "pot_split",
+      "round": 6
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.565007",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 63.25000000000001,
+      "reason": "pot_split",
+      "round": 6
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.565232",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 18.000000000000004,
+      "reason": "initial_bounty",
+      "round": 7
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.565235",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 22.0,
+      "reason": "initial_bounty",
+      "round": 7
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.565252",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 7
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.565254",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 0.5,
+      "reason": "bet_fee",
+      "round": 7
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.567542",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 5,
+      "reason": "search_tool_cost",
+      "round": 7
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.567642",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 7
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.567645",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 1.0,
+      "reason": "bet_fee",
+      "round": 7
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.567701",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 7
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.567704",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 1.5000000000000002,
+      "reason": "bet_fee",
+      "round": 7
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.567751",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 63.25000000000001,
+      "reason": "pot_split",
+      "round": 7
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.567753",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 51.75000000000001,
+      "reason": "pot_split",
+      "round": 7
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.567860",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 18.000000000000004,
+      "reason": "initial_bounty",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.567863",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 22.0,
+      "reason": "initial_bounty",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.567879",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.567881",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 0.5,
+      "reason": "bet_fee",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.569667",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 5,
+      "reason": "search_tool_cost",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.569741",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.569743",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1.0,
+      "reason": "bet_fee",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.571747",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 5,
+      "reason": "search_tool_cost",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.571830",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.571833",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1.5000000000000002,
+      "reason": "bet_fee",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.574796",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 5,
+      "reason": "search_tool_cost",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.574880",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 51.75000000000001,
+      "reason": "pot_split",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.574882",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 63.25000000000001,
+      "reason": "pot_split",
+      "round": 8
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575004",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 18.000000000000004,
+      "reason": "initial_bounty",
+      "round": 9
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575007",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 22.0,
+      "reason": "initial_bounty",
+      "round": 9
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575024",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 9
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575026",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 0.5,
+      "reason": "bet_fee",
+      "round": 9
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575074",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 9
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575076",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1.0,
+      "reason": "bet_fee",
+      "round": 9
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575120",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 9
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575122",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 1.5000000000000002,
+      "reason": "bet_fee",
+      "round": 9
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575165",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 51.75000000000001,
+      "reason": "pot_split",
+      "round": 9
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575167",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 63.25000000000001,
+      "reason": "pot_split",
+      "round": 9
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575251",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 22.0,
+      "reason": "initial_bounty",
+      "round": 10
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575253",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 18.000000000000004,
+      "reason": "initial_bounty",
+      "round": 10
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575267",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 10
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575268",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 0.5,
+      "reason": "bet_fee",
+      "round": 10
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575309",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 10
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575311",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 1.0,
+      "reason": "bet_fee",
+      "round": 10
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575349",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 10
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575350",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1.5000000000000002,
+      "reason": "bet_fee",
+      "round": 10
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575389",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 51.75000000000001,
+      "reason": "pot_split",
+      "round": 10
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575390",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 63.25000000000001,
+      "reason": "pot_split",
+      "round": 10
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575396",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 12.222222222222221,
+      "reason": "bet_won:BET-0029",
+      "round": 10
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575485",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 22.0,
+      "reason": "initial_bounty",
+      "round": 11
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575488",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 18.000000000000004,
+      "reason": "initial_bounty",
+      "round": 11
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575785",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 11
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575788",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 0.5,
+      "reason": "bet_fee",
+      "round": 11
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575844",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 11
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575845",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1.0,
+      "reason": "bet_fee",
+      "round": 11
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575886",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 11
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575888",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1.5000000000000002,
+      "reason": "bet_fee",
+      "round": 11
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575926",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 51.75000000000001,
+      "reason": "pot_split",
+      "round": 11
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.575928",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 63.25000000000001,
+      "reason": "pot_split",
+      "round": 11
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.576030",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 18.000000000000004,
+      "reason": "initial_bounty",
+      "round": 12
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.576032",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 22.0,
+      "reason": "initial_bounty",
+      "round": 12
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.576046",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 12
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.576048",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 0.5,
+      "reason": "bet_fee",
+      "round": 12
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.578726",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 5,
+      "reason": "search_tool_cost",
+      "round": 12
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.578874",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 12
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.578878",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 1.0,
+      "reason": "bet_fee",
+      "round": 12
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.578944",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 12
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.578947",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1.5000000000000002,
+      "reason": "bet_fee",
+      "round": 12
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.578998",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 51.75000000000001,
+      "reason": "pot_split",
+      "round": 12
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.579000",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 63.25000000000001,
+      "reason": "pot_split",
+      "round": 12
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.579107",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 18.000000000000004,
+      "reason": "initial_bounty",
+      "round": 13
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.579109",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 22.0,
+      "reason": "initial_bounty",
+      "round": 13
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.579126",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 13
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.579128",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 0.5,
+      "reason": "bet_fee",
+      "round": 13
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.579175",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 13
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.579177",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1.0,
+      "reason": "bet_fee",
+      "round": 13
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.579221",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 13
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.579223",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1.5000000000000002,
+      "reason": "bet_fee",
+      "round": 13
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.579266",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 51.75000000000001,
+      "reason": "pot_split",
+      "round": 13
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.579268",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 63.25000000000001,
+      "reason": "pot_split",
+      "round": 13
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.579356",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 22.0,
+      "reason": "initial_bounty",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.579358",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 18.000000000000004,
+      "reason": "initial_bounty",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.579373",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.579375",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 0.5,
+      "reason": "bet_fee",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.581231",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 5,
+      "reason": "search_tool_cost",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.581314",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.581316",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 1.0,
+      "reason": "bet_fee",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.581367",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.581369",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 1.5000000000000002,
+      "reason": "bet_fee",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.605335",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 5,
+      "reason": "search_tool_cost",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.605467",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 63.25000000000001,
+      "reason": "pot_split",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.605470",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 51.75000000000001,
+      "reason": "pot_split",
+      "round": 14
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.605641",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 22.0,
+      "reason": "initial_bounty",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.605644",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 18.000000000000004,
+      "reason": "initial_bounty",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.605662",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.605663",
+      "from": "Debater_Alpha",
+      "to": null,
+      "amount": 0.5,
+      "reason": "bet_fee",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.605718",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.605719",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 1.0,
+      "reason": "bet_fee",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.605764",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.605766",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 1.5000000000000002,
+      "reason": "bet_fee",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.618225",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 5,
+      "reason": "search_tool_cost",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.618437",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 63.25000000000001,
+      "reason": "pot_split",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.618443",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 51.75000000000001,
+      "reason": "pot_split",
+      "round": 15
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.618685",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 18.000000000000004,
+      "reason": "initial_bounty",
+      "round": 16
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.618690",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 22.0,
+      "reason": "initial_bounty",
+      "round": 16
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.618730",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 16
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.618735",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 0.5,
+      "reason": "bet_fee",
+      "round": 16
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.621002",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 5,
+      "reason": "search_tool_cost",
+      "round": 16
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.621085",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 16
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.621088",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 1.0,
+      "reason": "bet_fee",
+      "round": 16
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.621139",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 10,
+      "reason": "bet_stake",
+      "round": 16
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.621141",
+      "from": "Debater_Beta",
+      "to": null,
+      "amount": 1.5000000000000002,
+      "reason": "bet_fee",
+      "round": 16
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.621184",
+      "from": null,
+      "to": "Debater_Alpha",
+      "amount": 51.75000000000001,
+      "reason": "pot_split",
+      "round": 16
+    },
+    {
+      "timestamp": "2026-02-21T16:05:22.621186",
+      "from": null,
+      "to": "Debater_Beta",
+      "amount": 63.25000000000001,
+      "reason": "pot_split",
+      "round": 16
+    }
+  ]
+}

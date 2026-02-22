@@ -55,8 +55,8 @@ judgment3 = MultiDimensionJudgment(
 )
 conf_a3, conf_b3 = judgment3.weighted_confidence()
 print(f"  Clamped: A={conf_a3:.2%}, B={conf_b3:.2%}")
-if conf_b3 >= 0.10:
-    print("✅ Minimum 10% enforced")
+if conf_b3 >= 0.05:
+    print("✅ Minimum 5% enforced (new 5-95% range)")
 else:
     print("❌ Clamping failed")
     exit(1)

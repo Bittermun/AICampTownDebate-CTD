@@ -1,0 +1,10 @@
+{
+  "runs": 1,
+  "final_pass_rate": 0.0,
+  "benchmark_score_pass_rate": 0.0,
+  "gates_pass_rate": 0.0,
+  "validity_pass_rate": 1.0,
+  "bankruptcy_rate": 0.0,
+  "degraded_mode_rate": 1.0,
+  "live_source_failure_runs": 0
+}

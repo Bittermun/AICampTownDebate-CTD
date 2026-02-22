@@ -1,0 +1,15 @@
+{
+  "rounds_total": 16,
+  "bankruptcy_rate": 0.0,
+  "survival_runway_observed": 16,
+  "pass_rate": 0.8636,
+  "aggression_rate": 0.1364,
+  "mutual_pass_round_rate": 1.0,
+  "avg_iterations": 1.375,
+  "judge_score_entropy_bits": 3.3278,
+  "judge_margin_mean": 0.0265,
+  "judge_margin_stdev": 0.0165,
+  "adaptation_gain_after_loss": 0.0088,
+  "economy_reasoning_rate": 1.0,
+  "health_score": 0.4469
+}

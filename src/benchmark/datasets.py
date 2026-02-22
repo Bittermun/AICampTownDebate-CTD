@@ -1,4 +1,4 @@
-"""Dataset adapter layer for benchmark runner."""
+﻿"""Dataset adapter layer for benchmark runner."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -63,11 +63,19 @@ class OfflineFixtureAdapter:
 class HFDatasetAdapter:
     """Loads benchmark items from HuggingFace datasets with local caching."""
 
-    def __init__(self, dataset_specs: Dict[Tuple[str, str], DatasetSpec], cache_dir: str = "benchmarks/cache"):
+    def __init__(
+        self,
+        dataset_specs: Dict[Tuple[str, str], DatasetSpec],
+        cache_dir: str = "benchmarks/cache",
+        force_refresh: bool = False,
+        cache_only: bool = False,
+    ):
         self.dataset_specs = dataset_specs
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._pull_manifest: List[Dict[str, Any]] = []
+        self.force_refresh = force_refresh
+        self.cache_only = cache_only
 
     @property
     def pull_manifest(self) -> List[Dict[str, Any]]:
@@ -110,6 +118,25 @@ class HFDatasetAdapter:
         available = list(get_dataset_split_names(spec.hf_dataset_id, spec.hf_subset))
         split = self._resolve_split(spec.split, available)
         return split, load_dataset(spec.hf_dataset_id, name=spec.hf_subset, split=split)
+
+    def _validate_schema(self, row: Dict[str, Any], spec: DatasetSpec, group_name: str, dataset_name: str) -> None:
+        mapping = spec.column_mapping or {}
+        required_cols: List[str] = [str(mapping.get("prompt", "prompt"))]
+        for key in ("id", "expected", "source_ref"):
+            if key in mapping and mapping[key]:
+                required_cols.append(str(mapping[key]))
+        metric_map = mapping.get("metric_values", {})
+        if isinstance(metric_map, dict):
+            required_cols.extend(str(v) for v in metric_map.values() if v)
+        tags_field = mapping.get("tags")
+        if isinstance(tags_field, str):
+            required_cols.append(tags_field)
+
+        missing = sorted({col for col in required_cols if col not in row})
+        if missing:
+            raise ValueError(
+                f"Column mapping validation failed for {group_name}/{dataset_name}. Missing columns: {missing}"
+            )
 
     def _row_to_item(
         self,
@@ -206,6 +233,7 @@ class HFDatasetAdapter:
                 "fetch_timestamp": datetime.now(timezone.utc).isoformat(),
                 "cache_data_path": str(data_path),
                 "cache_meta_path": str(meta_path),
+                "cache_mode": "cache_only" if self.cache_only else ("refresh" if self.force_refresh else "prefer_cache"),
             }
         )
 
@@ -220,7 +248,11 @@ class HFDatasetAdapter:
         items: List[BenchmarkItem] = []
         serialized_rows: List[Dict[str, Any]] = []
 
-        if data_path.exists():
+        if self.cache_only and not data_path.exists():
+            raise RuntimeError(f"Cache-only mode enabled, but cache miss for {group_name}/{dataset_name}")
+
+        should_read_cache = data_path.exists() and not self.force_refresh
+        if should_read_cache:
             split_name = spec.split or "train"
             with data_path.open("r", encoding="utf-8") as f:
                 for i, line in enumerate(f):
@@ -251,7 +283,10 @@ class HFDatasetAdapter:
             resolved_split, hf_rows = self._load_hf_split(spec)
             split_name = resolved_split
             for i, row in enumerate(hf_rows):
-                mapped = self._row_to_item(dict(row), group_name, dataset_name, i, spec, split_name)
+                row_dict = dict(row)
+                if i == 0:
+                    self._validate_schema(row_dict, spec, group_name, dataset_name)
+                mapped = self._row_to_item(row_dict, group_name, dataset_name, i, spec, split_name)
                 items.append(mapped)
                 serialized_rows.append(self._serialize_item(mapped))
             data_path.write_text(

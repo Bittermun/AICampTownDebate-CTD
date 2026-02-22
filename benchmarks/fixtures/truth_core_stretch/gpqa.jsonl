@@ -1,0 +1,2 @@
+{"id":"gpqa-1","prompt":"Sample GPQA item 1","expected":"B","metric_values":{"accuracy":0.59},"tags":["external_proxy"],"source_ref":"fixture:gpqa"}
+{"id":"gpqa-2","prompt":"Sample GPQA item 2","expected":"A","metric_values":{"accuracy":0.61},"tags":["external_proxy"],"source_ref":"fixture:gpqa"}

@@ -1,11 +1,11 @@
-"""Phase 1 benchmark orchestrator."""
+﻿"""Phase 1 benchmark orchestrator."""
 from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from statistics import mean
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple
 import hashlib
 import json
 import platform
@@ -25,6 +25,8 @@ from .config_models import BenchmarkPolicy, GroupPolicy
 from .datasets import HFDatasetAdapter, OfflineFixtureAdapter
 from .scoring import score_aggregate, score_group, weighted_group_scores
 from .types import BenchmarkRunResult, GateResult, SeedResult
+
+SourceMode = Literal["default", "core_live_stretch_fixture", "all_live", "all_fixture"]
 
 
 def _hash_dict(value: Dict) -> str:
@@ -74,6 +76,19 @@ def _deterministic_slice(items: list, limit: Optional[int], seed: int) -> list:
     start = seed % len(items)
     rotated = items[start:] + items[:start]
     return rotated[:limit]
+
+
+def _dataset_source_mode(source_mode: SourceMode, group_name: str, has_hf_dataset: bool) -> str:
+    if source_mode == "all_fixture":
+        return "fixture"
+    if source_mode == "all_live":
+        return "live" if has_hf_dataset else "fixture"
+    if source_mode == "core_live_stretch_fixture":
+        if "truth_core_stretch" in group_name:
+            return "fixture"
+        if "truth_core_core" in group_name:
+            return "live" if has_hf_dataset else "fixture"
+    return "default"
 
 
 def _run_seed_gates(
@@ -148,13 +163,20 @@ def _evaluate_group(
     strict_runtime: bool,
     allow_live_source_fallback: bool,
     live_source_failures: List[Dict],
+    source_mode: SourceMode = "default",
 ):
     all_items = []
     degraded_mode = False
     degraded_reasons: List[str] = []
     for d in group_policy.datasets:
         limit = d.sample_size_pairs if d.sample_size_pairs is not None else d.sample_size
-        use_live = d.source == "external" and bool(d.hf_dataset_id)
+        mode = _dataset_source_mode(source_mode, group_name, has_hf_dataset=bool(d.hf_dataset_id))
+        if mode == "live":
+            use_live = True
+        elif mode == "fixture":
+            use_live = False
+        else:
+            use_live = d.source == "external" and bool(d.hf_dataset_id)
         if use_live:
             try:
                 items, degraded = hf_adapter.load(group_name=group_name, dataset_name=d.name, limit=None)
@@ -172,6 +194,7 @@ def _evaluate_group(
                         "split": d.split,
                         "error": str(exc),
                         "fallback": "fixture",
+                        "source_mode": source_mode,
                     }
                 )
                 items, degraded = fixture_adapter.load(group_name=group_name, dataset_name=d.name, limit=None)
@@ -260,12 +283,13 @@ def _run_seed_tournament(
     judge_model_name: str,
     seed: int,
     strict_runtime: bool,
+    artifact_root: str,
 ) -> Tuple[Dict[str, str], Dict[str, float]]:
     random.seed(seed)
 
     tournament, observer = _build_seed_tournament(tc, model_name, judge_model_name, strict_runtime=strict_runtime)
     result = tournament.run()
-    seed_dir = Path("logs/benchmark_artifacts") / f"seed_{seed}"
+    seed_dir = Path(artifact_root) / "benchmark_artifacts" / f"seed_{seed}"
     seed_dir.mkdir(parents=True, exist_ok=True)
     base_path = seed_dir / "tournament_results.json"
     tournament.save_results(str(base_path))
@@ -411,6 +435,11 @@ def run_phase1(
     max_iterations_override: Optional[int] = None,
     parent_performer_id: Optional[str] = None,
     variant_label: Optional[str] = None,
+    refresh_live_cache: bool = False,
+    cache_only_live: bool = False,
+    artifact_root: Optional[str] = None,
+    source_mode: SourceMode = "default",
+    run_label: Optional[str] = None,
 ) -> BenchmarkRunResult:
     """Run full phase-1 benchmark with live/fixture datasets + real seed artifacts."""
     tc = load_config(tournament_config_path)
@@ -421,6 +450,9 @@ def run_phase1(
     judge_model_configured = judge_model_override or tc.judges[0].model
     judge_model_path = normalize_model_path(judge_model_configured)
     strict_runtime = policy.runtime.strict_mode_required and not allow_stub
+    artifact_root_path = artifact_root or "logs"
+    if source_mode not in ("default", "core_live_stretch_fixture", "all_live", "all_fixture"):
+        raise ValueError(f"Unsupported source_mode: {source_mode}")
     run_id = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     performer_id = _hash_dict({"model": model_name, "judge": judge_model_configured})
     policy_hash = _hash_dict(asdict(policy))
@@ -471,6 +503,7 @@ def run_phase1(
             tier_before_after={"before": "Unranked", "after": "Unranked"},
             run_metadata={
                 "run_id": run_id,
+                "run_label": run_label,
                 "performer_id": performer_id,
                 "parent_performer_id": parent_performer_id,
                 "variant_label": variant_label,
@@ -491,6 +524,8 @@ def run_phase1(
                     "judge_backend": _backend_label(judge_model_configured),
                     "strict_runtime": strict_runtime,
                     "allow_stub": allow_stub,
+                    "source_mode": source_mode,
+                    "artifact_root": artifact_root_path,
                 },
             },
         )
@@ -500,7 +535,12 @@ def run_phase1(
     for group_name, group_policy in policy.benchmark_groups.items():
         for ds in group_policy.datasets:
             dataset_specs[(group_name, ds.name)] = ds
-    hf_adapter = HFDatasetAdapter(dataset_specs=dataset_specs, cache_dir="benchmarks/cache")
+    hf_adapter = HFDatasetAdapter(
+        dataset_specs=dataset_specs,
+        cache_dir="benchmarks/cache",
+        force_refresh=refresh_live_cache,
+        cache_only=cache_only_live,
+    )
     seed_results: List[SeedResult] = []
     aggregate_scores = []
     seed_score_pass_flags = []
@@ -527,13 +567,17 @@ def run_phase1(
                 strict_runtime=strict_runtime,
                 allow_live_source_fallback=policy.runtime.allow_live_source_fallback,
                 live_source_failures=live_source_failures,
+                source_mode=source_mode,
             )
             group_results[group_name] = res
             any_degraded_mode = any_degraded_mode or res.degraded_mode
 
         group_weights = {name: gp.weight for name, gp in policy.benchmark_groups.items()}
         aggregate = weighted_group_scores(group_results, group_weights)
-        score_pass = aggregate >= policy.aggregate_scoring.min_pass_score and all(gr.pass_group for gr in group_results.values())
+        blocking_group_names = [name for name, gp in policy.benchmark_groups.items() if gp.blocking]
+        if not blocking_group_names:
+            blocking_group_names = list(group_results.keys())
+        score_pass = aggregate >= policy.aggregate_scoring.min_pass_score and all(group_results[name].pass_group for name in blocking_group_names)
         aggregate_scores.append(aggregate)
         seed_score_pass_flags.append(score_pass)
 
@@ -543,6 +587,7 @@ def run_phase1(
             judge_model_name=judge_model_configured,
             seed=seed,
             strict_runtime=strict_runtime,
+            artifact_root=artifact_root_path,
         )
 
         seed_validity_issues: List[str] = []
@@ -680,6 +725,7 @@ def run_phase1(
         },
         run_metadata={
             "run_id": run_id,
+            "run_label": run_label,
             "performer_id": performer_id,
             "parent_performer_id": parent_performer_id,
             "variant_label": variant_label,
@@ -702,6 +748,8 @@ def run_phase1(
                 "judge_backend": _backend_label(judge_model_configured),
                 "strict_runtime": strict_runtime,
                 "allow_stub": allow_stub,
+                "source_mode": source_mode,
+                "artifact_root": artifact_root_path,
             },
             "artifact_manifest": {
                 **_build_artifact_manifest(
@@ -715,3 +763,7 @@ def run_phase1(
         },
         notes=[f"metadata_hash={_hash_dict(metadata_blob)}"],
     )
+
+
+
+

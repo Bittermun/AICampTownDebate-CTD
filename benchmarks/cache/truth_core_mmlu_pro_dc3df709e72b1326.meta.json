@@ -1,0 +1,8 @@
+{
+  "dataset_id": "TIGER-Lab/MMLU-Pro",
+  "subset": null,
+  "split": "test",
+  "row_count": 12032,
+  "content_hash": "ad1d902cf1adf4fbc91bc855052a7daf4c8058cbb0acfc9d43de7dd1f647c672",
+  "fetch_timestamp": "2026-02-21T23:32:39.794014+00:00"
+}

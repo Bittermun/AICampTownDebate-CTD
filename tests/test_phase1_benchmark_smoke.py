@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Smoke test for CLI phase-1 benchmark runner."""
 import json
 import subprocess
@@ -17,6 +17,12 @@ def test_smoke_cli():
     cfg["trajectory_checks"]["enabled"] = False
     cfg["reporting"]["output_paths"]["benchmark_summary"] = str(td_path / "benchmark_summary.json")
     cfg["reporting"]["output_paths"]["champion_registry"] = str(td_path / "champion_registry.json")
+
+    # Keep smoke deterministic/offline by forcing fixture path.
+    for group in cfg.get("benchmark_groups", {}).values():
+        for ds in group.get("datasets", []):
+            ds.pop("hf_dataset_id", None)
+            ds.pop("hf_subset", None)
 
     cfg_path = td_path / "benchmark_test.yaml"
     cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")

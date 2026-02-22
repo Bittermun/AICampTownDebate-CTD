@@ -1,3 +1,298 @@
+## 2026-02-22 | Session 33: Iteration Run (Token Check + 3-Seed Collection)
+
+### What Happened
+- Validated current environment after receiving HF token input.
+- vLLM preflight still fails locally (server unavailable).
+- HF Hub HTTPS still intermittently blocked in this environment (`WinError 10013`), causing core-live mode retries/timeouts.
+- Proceeded with stable collection path (`all_fixture`) to continue data gathering without blocking.
+
+### Runs Executed
+1. Core-live test attempt:
+   - `python scripts/run_phase1_batch.py --model-id ollama:qwen2.5:7b --judge-model ollama:qwen2.5:7b --seeds 101 --matrix-labels set01 --source-mode core_live_stretch_fixture --concurrency 2 --bankruptcy-retries 1`
+   - Result: timed out due to HF connectivity retries.
+2. 3-seed collection (stable fixture mode):
+   - `python scripts/run_phase1_batch.py --model-id ollama:qwen2.5:7b --judge-model ollama:qwen2.5:7b --seeds 101,202,303 --matrix-labels set01 --source-mode all_fixture --concurrency 1 --bankruptcy-retries 1`
+   - Batch ID: `20260222T031247Z`
+
+### Aggregate Results (Batch 20260222T031247Z)
+- `runs`: 3
+- `final_pass_rate`: 0.0
+- `benchmark_score_pass_rate`: 0.0
+- `gates_pass_rate`: 1.0
+- `validity_pass_rate`: 1.0
+- `bankruptcy_rate`: 0.0
+- `degraded_mode_rate`: 1.0
+- `live_source_failure_runs`: 0
+
+### Per-Seed Snapshot
+- Seed 101: `aggregate_score=0.594811`, `final_pass=false`, `bankrupt=false`
+- Seed 202: `aggregate_score=0.594811`, `final_pass=false`, `bankrupt=false`
+- Seed 303: `aggregate_score=0.594811`, `final_pass=false`, `bankrupt=false`
+
+### Interpretation
+- Pipeline and validity gates are stable in batch mode.
+- No bankruptcy events observed across 3 seeds in this fixture collection.
+- Main blocker to core-live collection remains network-level HF access behavior in this environment, not benchmark orchestration logic.
+
+### Artifacts
+- `logs/benchmark_batches/20260222T031247Z/aggregate_report.json`
+- `logs/benchmark_batches/20260222T031247Z/batch_manifest.json`
+- `logs/benchmark_batches/20260222T031247Z/batch_summary.jsonl`
+## 2026-02-22 | Session 32: Data Gathering Started (Phase A Shakedown)
+
+### Run Executed
+- Command:
+  - `python scripts/run_phase1_batch.py --model-id ollama:qwen2.5:7b --judge-model ollama:qwen2.5:7b --seeds 101 --matrix-labels set01 --source-mode all_fixture --concurrency 1 --bankruptcy-retries 1`
+- Batch ID:
+  - `20260222T005117Z`
+- Output root:
+  - `logs/benchmark_batches/20260222T005117Z/`
+
+### Why `all_fixture` in this run
+- Attempted `core_live_stretch_fixture` first, but HF connectivity in this environment repeatedly failed (`WinError 10013`) and the command timed out.
+- Used fixture mode to start data gathering immediately and validate pipeline throughput + artifact integrity.
+
+### Aggregate Results
+- `runs`: 1
+- `final_pass_rate`: 0.0
+- `benchmark_score_pass_rate`: 0.0
+- `gates_pass_rate`: 1.0
+- `validity_pass_rate`: 1.0
+- `bankruptcy_rate`: 0.0
+- `degraded_mode_rate`: 1.0
+- `live_source_failure_runs`: 0
+
+### Per-Run Outcome (seed101_set01)
+- `return_code`: 2
+- `pass_fail`: fail
+- `final_pass`: false
+- `benchmark_score_pass`: false
+- `gates_pass`: true
+- `validity_pass`: true
+- `aggregate_score`: 0.594811
+- `bankrupt`: false
+- `degraded_mode`: true (`fixture-backed datasets in benchmark policy`)
+
+### Key Group Scores
+- `truth_core_core`: 0.630000 (pass)
+- `truth_core_stretch`: 0.600000 (pass, non-blocking)
+- `reasoning_core`: 0.586667 (pass)
+- `adversarial_robustness`: 0.626250 (pass)
+- `economy_adaptation`: 0.518472 (pass)
+- Aggregate below policy minimum (`0.594811 < 0.60`) caused benchmark score fail.
+
+### Artifacts
+- Batch aggregate: `logs/benchmark_batches/20260222T005117Z/aggregate_report.json`
+- Batch manifest: `logs/benchmark_batches/20260222T005117Z/batch_manifest.json`
+- Run summary: `logs/benchmark_batches/20260222T005117Z/seed101_set01/attempt_1/benchmark_summary.json`
+## 2026-02-22 | Session 31: Batch Data-Gathering Infrastructure (Isolation + Source Modes + Bankruptcy Retry)
+
+### What Happened
+- Implemented the execution plan for scalable benchmark data gathering with safe parallelism.
+- Added run-isolated artifact roots, source-mode overrides, batch orchestration, and retry-once bankruptcy handling.
+- Verified batch runner end-to-end with a one-seed shakedown run.
+
+### Files Changed
+- `src/benchmark/runner.py`
+- `tests/run_phase1_benchmark.py`
+- `src/benchmark/batch_utils.py` (new)
+- `scripts/run_phase1_batch.py` (new)
+- `scripts/run_phase1_batch.ps1` (new)
+- `tests/analyze_phase1_batch.py` (new)
+- `tests/test_benchmark_source_mode_overrides.py` (new)
+- `tests/test_benchmark_artifact_isolation.py` (new)
+- `tests/test_benchmark_batch_utils.py` (new)
+
+### Implementation Details
+1. **Run isolation for parallel safety**
+   - Added `artifact_root` support through CLI + runner.
+   - Seed artifacts now write under `<artifact_root>/benchmark_artifacts/seed_<seed>/...`.
+2. **Source mode overrides**
+   - Added source mode control with options:
+     - `default`
+     - `core_live_stretch_fixture`
+     - `all_live`
+     - `all_fixture`
+   - Wired through `run_phase1` and CLI.
+3. **Batch runner**
+   - Added `scripts/run_phase1_batch.py` with:
+     - matrix execution over `seeds x matrix_labels`
+     - configurable concurrency
+     - per-run isolated summary/registry/artifact paths
+     - batch manifest + JSONL run summary + aggregate report
+4. **Bankruptcy retry policy**
+   - Implemented `retry-once-then-mark` policy.
+   - Bankruptcy detection reads per-seed tournament result final balances from benchmark summary artifact refs.
+5. **Aggregation utility**
+   - Added `tests/analyze_phase1_batch.py` to aggregate JSONL into a compact report.
+
+### Validation
+- Passed:
+  - `python tests/test_benchmark_source_mode_overrides.py`
+  - `python tests/test_benchmark_artifact_isolation.py`
+  - `python tests/test_benchmark_batch_utils.py`
+  - `python tests/test_benchmark_config_parse.py`
+  - `python tests/test_benchmark_nonblocking_groups.py`
+  - `python tests/test_phase1_benchmark_smoke.py`
+  - `python tests/test_benchmark_runner_validity.py`
+  - `python tests/test_benchmark_gate_semantics.py`
+  - `python tests/test_benchmark_registry.py`
+  - `python -m py_compile src/benchmark/runner.py src/benchmark/batch_utils.py tests/run_phase1_benchmark.py scripts/run_phase1_batch.py tests/analyze_phase1_batch.py tests/test_benchmark_source_mode_overrides.py tests/test_benchmark_artifact_isolation.py tests/test_benchmark_batch_utils.py`
+- End-to-end shakedown executed:
+  - `python scripts/run_phase1_batch.py --model-id stub --judge-model stub --seeds 101 --matrix-labels set01 --allow-stub --source-mode all_fixture --concurrency 1`
+  - Output directory example:
+    - `logs/benchmark_batches/20260222T000521Z/`
+
+### Known Limits
+- Batch script currently uses matrix labels as run partition keys; it does not yet mutate tournament topic lists per label automatically.
+- Full strict live wave still depends on external HF reachability and gated dataset access policy.
+## 2026-02-21 | Session 30: Staged Truth-Core Difficulty (Blocking Core + Stretch GPQA)
+
+### What Happened
+- Implemented staged truth-core difficulty so GPQA is retained as a stretch signal but no longer blocks baseline benchmark bring-up.
+- Added explicit group-level `blocking` semantics in benchmark policy parsing and runner pass logic.
+
+### Files Changed
+- `src/benchmark/config_models.py`
+- `src/benchmark/runner.py`
+- `configs/benchmark_phase1.yaml`
+- `tests/test_benchmark_config_parse.py`
+- `tests/test_benchmark_nonblocking_groups.py` (new)
+- `tests/test_benchmark_runner_validity.py`
+- `tests/test_benchmark_gate_semantics.py`
+- `tests/test_phase1_benchmark_smoke.py`
+- `benchmarks/fixtures/truth_core_core/mmlu_pro.jsonl` (new copy)
+- `benchmarks/fixtures/truth_core_core/truthfulqa.jsonl` (new copy)
+- `benchmarks/fixtures/truth_core_stretch/gpqa.jsonl` (new copy)
+
+### Policy + Runner Changes
+1. **Group-level blocking flag**
+   - Added `GroupPolicy.blocking: bool = True`.
+   - YAML parsing now supports per-group `blocking` with backward-compatible default `true`.
+2. **Benchmark score pass behavior**
+   - `score_pass` now requires group pass only for groups where `blocking=true`.
+   - Aggregate scoring semantics remain unchanged.
+3. **Truth-core split**
+   - `truth_core` split into:
+     - `truth_core_core` (blocking=true): MMLU-Pro + TruthfulQA
+     - `truth_core_stretch` (blocking=false): GPQA
+   - GPQA kept in policy as stretch signal.
+
+### Test Hardening for Offline/Stub Runs
+- Updated benchmark tests that run stub mode to explicitly disable live HF fields in-memory/temp config.
+- This avoids long HF retries in offline test environments and keeps CI deterministic.
+
+### Validation
+- Passed:
+  - `python tests/test_benchmark_config_parse.py`
+  - `python tests/test_benchmark_nonblocking_groups.py`
+  - `python tests/test_benchmark_gate_semantics.py`
+  - `python tests/test_benchmark_runner_validity.py`
+  - `python tests/test_benchmark_scoring.py`
+  - `python tests/test_benchmark_datasets.py`
+  - `python tests/test_benchmark_live_failure_policy.py`
+  - `python tests/test_phase1_benchmark_smoke.py`
+  - `python tests/test_benchmark_registry.py`
+  - `python -m py_compile src/benchmark/config_models.py src/benchmark/runner.py tests/test_benchmark_config_parse.py tests/test_benchmark_nonblocking_groups.py tests/test_benchmark_runner_validity.py tests/test_benchmark_gate_semantics.py tests/test_phase1_benchmark_smoke.py`
+
+### Notes
+- Final pass philosophy remains intact (`benchmark_score_pass && gates_pass && validity_pass`).
+- This change only scopes which benchmark groups are treated as blocking for `benchmark_score_pass`.
+## 2026-02-21 | Session 29: Strict Live Seed Attempt (Environment Verification)
+
+### What Happened
+- Attempted strict live phase-1 run to verify:
+  - `live_source_failures=[]`
+  - `degraded_mode=false`
+  - non-empty `live_sources_used`
+
+### Run Attempts and Outcomes
+1. vLLM strict run attempt:
+   - Failed preflight: local vLLM server unavailable.
+2. Ollama strict run attempt:
+   - Preflight passed for model backend.
+   - Failed initially because `datasets` package was missing.
+3. Installed `datasets` successfully and retried strict run.
+4. Retried with escalated permissions for outbound access:
+   - HuggingFace access worked for at least part of truth-core pull.
+   - Strict run failed on `GPQA` because `Idavidrein/gpqa` is gated/auth-required.
+
+### Current Strict-Live Status
+- Strict live run remains blocked by dataset access control (GPQA gating), not by runner logic.
+- Therefore the three success criteria cannot be fully satisfied yet in this environment.
+
+### Exact Blocker
+- Error: `Dataset 'Idavidrein/gpqa' is a gated dataset on the Hub. You must be authenticated to access it.`
+
+### Next Action Required
+- Provide HF authentication with access to `Idavidrein/gpqa`, or
+- replace GPQA config with an ungated equivalent for strict live verification.
+## 2026-02-21 | Session 28: Live-Ingestion Hardening (Schema + Cache + Failure Policy)
+
+### What Happened
+- Implemented the reliability hardening pass requested before scale-up.
+- Added live dataset schema validation, cache lifecycle controls, strict-vs-fallback policy tests, and operator-facing live-source CLI summary output.
+
+### Files Changed
+- `src/benchmark/datasets.py`
+- `src/benchmark/runner.py`
+- `tests/run_phase1_benchmark.py`
+- `tests/test_benchmark_datasets.py`
+- `tests/test_benchmark_live_failure_policy.py`
+
+### Implementation Details
+1. **Schema/mapping validation (fail-fast)**
+   - `HFDatasetAdapter` now validates mapped columns on first fetched row before ingesting the split.
+   - Missing mapped columns raise explicit error:
+     - `Column mapping validation failed for <group>/<dataset>. Missing columns: [...]`
+2. **Cache lifecycle controls**
+   - Added `HFDatasetAdapter` controls:
+     - `force_refresh`: bypass cache and re-pull, then overwrite cache
+     - `cache_only`: pin to cache and fail on cache miss
+   - Added cache mode provenance in pull manifest (`cache_mode`: `prefer_cache|refresh|cache_only`).
+3. **Runner integration**
+   - `run_phase1()` now supports:
+     - `refresh_live_cache`
+     - `cache_only_live`
+   - These flags are passed directly into `HFDatasetAdapter`.
+4. **CLI controls + operator summary**
+   - Added benchmark CLI flags:
+     - `--refresh-live-cache`
+     - `--cache-only-live`
+   - Added concise summary line after run:
+     - live sources used count
+     - live source failures count
+     - degraded reason
+5. **Failure policy tests**
+   - Added tests for live pull failure behavior:
+     - fallback enabled + non-strict -> fixture fallback
+     - strict runtime -> hard fail
+     - fallback disabled -> hard fail
+
+### Validation
+- Passed:
+  - `python tests/test_benchmark_datasets.py`
+  - `python tests/test_benchmark_live_failure_policy.py`
+  - `python tests/test_benchmark_config_parse.py`
+  - `python tests/test_benchmark_scoring.py`
+  - `python tests/test_benchmark_runner_validity.py`
+  - `python tests/test_benchmark_gate_semantics.py`
+  - `python tests/test_phase1_benchmark_smoke.py`
+  - `python tests/test_benchmark_registry.py`
+- Failed:
+  - None in this session.
+
+### Working Commands
+- Default live mode (prefer cache):
+  - `python tests/run_phase1_benchmark.py --config configs/benchmark_phase1.yaml --tournament-config configs/vllm_tournament_recommended.yaml --model-id vllm:Qwen/Qwen2.5-7B-Instruct --judge-model vllm:Qwen/Qwen2.5-7B-Instruct --seeds 101 --offline-fixtures-dir benchmarks/fixtures`
+- Force live re-pull:
+  - `python tests/run_phase1_benchmark.py --config configs/benchmark_phase1.yaml --tournament-config configs/vllm_tournament_recommended.yaml --model-id vllm:Qwen/Qwen2.5-7B-Instruct --judge-model vllm:Qwen/Qwen2.5-7B-Instruct --seeds 101 --offline-fixtures-dir benchmarks/fixtures --refresh-live-cache`
+- Cache-only reproducibility mode:
+  - `python tests/run_phase1_benchmark.py --config configs/benchmark_phase1.yaml --tournament-config configs/vllm_tournament_recommended.yaml --model-id vllm:Qwen/Qwen2.5-7B-Instruct --judge-model vllm:Qwen/Qwen2.5-7B-Instruct --seeds 101 --offline-fixtures-dir benchmarks/fixtures --cache-only-live`
+
+### Known Limits
+- Full strict live validation still depends on real backend availability + networked HF access in execution environment.
+- First-row schema validation is intentionally lightweight; deeper semantic checks (value-level quality checks) remain out of scope for this pass.
 ## 2026-02-21 | Session 27: Next-Step Plan + Status Snapshot
 
 ### Current Status
@@ -693,3 +988,54 @@ Would report 15.0 for three 100-token bets, when actual fees were 5 + 25 + 50 = 
 
 
 
+
+
+
+
+
+
+
+## 2026-02-22 | Session 34: Batch Bankruptcy Replacement Mode (Controlled, Optional)
+
+### What Happened
+- Added optional replacement mode for bankrupt batch runs.
+- Kept existing retry-once bankruptcy behavior as default when replacement mode is off.
+- Preserved benchmark final pass semantics and registry update path (no changes to `run_phase1` or registry logic).
+
+### Files Changed
+- `scripts/run_phase1_batch.py`
+- `src/benchmark/batch_utils.py`
+- `tests/test_benchmark_batch_utils.py`
+- `DEVLOG.md`
+
+### Implementation Details
+1. **New batch CLI flags**
+   - `--replacement-mode off|on` (default: `off`)
+   - `--replacement-roster <csv model ids>`
+   - `--replacement-judge-model <optional>`
+   - `--max-replacements-per-run <int>` (default: `1`)
+2. **Replacement trigger behavior**
+   - Trigger only after a run ends in terminal bankruptcy (`terminal_bankrupt=true` after retry policy).
+   - If replacement mode is on and replacement budget remains, reruns same `seed+label` with replacement model(s).
+3. **Provenance fields added to batch records/manifest**
+   - `original_model_id`
+   - `effective_model_id`
+   - `was_replaced`
+   - `replacement_index`
+   - `replaced_from_run_id`
+4. **Aggregate reporting additions**
+   - `replacement_run_count`
+   - `replacement_success_rate`
+5. **Regression guard for replacement-off behavior**
+   - Added assertions that replacement metrics remain zero when no replacement runs are present.
+
+### Validation
+- Passed:
+  - `python tests/test_benchmark_batch_utils.py`
+  - `python -m py_compile scripts/run_phase1_batch.py src/benchmark/batch_utils.py tests/test_benchmark_batch_utils.py`
+- Failed:
+  - None in this session’s targeted validation.
+
+### Known Limits
+- Replacement mode currently advances through `replacement_roster` in listed order; no automatic performance-based selection.
+- Replacement mode relies on bankruptcy detection from benchmark summary artifact references (same mechanism as existing retry policy).

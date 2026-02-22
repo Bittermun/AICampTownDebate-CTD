@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Tests run validity checks in phase-1 benchmark runner."""
 from pathlib import Path
 import sys
@@ -11,8 +11,16 @@ from src.benchmark.config_models import load_benchmark_policy
 from src.benchmark.runner import run_phase1
 
 
+def _disable_live_sources(policy) -> None:
+    for group in policy.benchmark_groups.values():
+        for ds in group.datasets:
+            ds.hf_dataset_id = None
+            ds.hf_subset = None
+
+
 def test_missing_required_artifact_marks_invalid():
     policy = load_benchmark_policy("configs/benchmark_phase1.yaml")
+    _disable_live_sources(policy)
     policy.invariants.run_validity.required_artifacts.append("nonexistent_artifact")
     policy.trajectory_checks.enabled = False
 
