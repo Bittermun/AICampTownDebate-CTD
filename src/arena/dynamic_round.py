@@ -658,21 +658,21 @@ class DynamicDebateRound:
             won_a = ctx.current_judgment.confidence_a > ctx.initial_judgment.confidence_a
             won_b = ctx.current_judgment.confidence_b > ctx.initial_judgment.confidence_b
             
-            # Resolve bets for debater A (award payouts if won)
+            # Resolve bets for debater A — convex (sqrt-shaped) reward curve:
+            #   5pt improvement  → 1.07x  |  20pt → 2.00x  |  30pt → 2.73x  |  40pt+ → 3.00x cap
             for bet in bets_a:
-                # Multiplier: confidence improvement ratio (min 1.0 to return stake)
-                if won_a and ctx.initial_judgment.confidence_a > 0:
-                    multiplier = ctx.current_judgment.confidence_a / ctx.initial_judgment.confidence_a
-                    multiplier = max(1.0, min(multiplier, 3.0))  # Cap at 3x
+                if won_a:
+                    improvement_a = ctx.current_judgment.confidence_a - ctx.initial_judgment.confidence_a
+                    multiplier = 1.0 + min(2.0, (max(0.0, improvement_a) * 10) ** 0.5)
                 else:
                     multiplier = 1.0
                 self.betting.resolve_bet(bet, won_a, multiplier, self.ledger)
             
-            # Resolve bets for debater B (award payouts if won)
+            # Resolve bets for debater B (same convex curve)
             for bet in bets_b:
-                if won_b and ctx.initial_judgment.confidence_b > 0:
-                    multiplier = ctx.current_judgment.confidence_b / ctx.initial_judgment.confidence_b
-                    multiplier = max(1.0, min(multiplier, 3.0))  # Cap at 3x
+                if won_b:
+                    improvement_b = ctx.current_judgment.confidence_b - ctx.initial_judgment.confidence_b
+                    multiplier = 1.0 + min(2.0, (max(0.0, improvement_b) * 10) ** 0.5)
                 else:
                     multiplier = 1.0
                 self.betting.resolve_bet(bet, won_b, multiplier, self.ledger)
@@ -691,6 +691,7 @@ class DynamicDebateRound:
                 )
         
         return ctx
+
 
     def _audit_round_accounting(self, ctx: DynamicRoundContext) -> None:
         """Audit round-level mint/burn invariants using ledger transactions."""
