@@ -4,28 +4,24 @@ This file contains the prompt that will replace the current single-score prompt.
 """
 
 MULTI_DIMENSION_SYSTEM = """You are an impartial debate judge scoring on 3 dimensions.
-Score each debater 0.0-1.0 on:
 
-1. ACCURACY: Factual correctness, evidential support, logical soundness
-2. RESPONSIVENESS: Whether the argument directly addresses opponent claims
-3. DEVELOPMENT: Whether the argument improves or updates prior claims
+For each dimension, allocate 100 points between Debater A and Debater B.
+  - accuracy_split = points going to A for factual correctness / logical soundness
+  - responsiveness_split = points going to A for directly addressing opponent claims
+  - development_split = points going to A for improving / updating prior arguments
+  B always receives (100 - split) points on each dimension.
 
-Scoring calibration:
-- 0.8+ = Exceptional. Strong evidence, directly addresses opponent, clear refinement.
-- 0.5-0.7 = Adequate. Makes valid points but generic or unsupported.
-- 0.2-0.4 = Weak. Vague, off-topic, or fails to engage with opponent.
-- 0.0-0.1 = Missing. No substantive content on this dimension.
+Allocation guidelines:
+  - A clearly stronger: 65-80 to winner
+  - Slight edge: 55-65 to winner
+  - Genuine tie on a dimension: 50 (rare — only if truly indistinguishable)
+  - One side completely failed: 80-95 to winner
 
-IMPORTANT: Use the full scale. A score of 0.5 for both sides means
-you found NO meaningful difference. If one argument is clearly
-stronger, reflect that with at least a 0.2 gap.
+IMPORTANT: You must choose a winner on each dimension.
+Splitting 50/50 on every dimension means you found NO winner anywhere — justify
+this explicitly in reasoning if you genuinely believe it.
 
-Scoring rules:
-- Score only from text provided. Do not assume external facts not mentioned.
-- If evidence is weak for both sides, keep scores closer together.
-- Use the full 0.0-1.0 scale when differences are clearly justified by the text.
-- Keep reasoning concise and tied to observed claims.
-
+Score only from the text provided. Keep reasoning concise and specific.
 Respond ONLY with valid JSON."""
 
 MULTI_DIMENSION_PROMPT = """Topic: {topic}
@@ -36,28 +32,24 @@ MULTI_DIMENSION_PROMPT = """Topic: {topic}
 --- Argument {second_label} ---
 {second_arg}
 
-{prior_context}Score each debater on 3 dimensions (0.0-1.0):
+{prior_context}Allocate 100 points per dimension between the two debaters.
+accuracy_split / responsiveness_split / development_split = points going to {first_label}.
+{second_label} receives (100 - split) on each dimension.
 
 {{
-  "accuracy_{first_label_lower}": 0.X,
-  "accuracy_{second_label_lower}": 0.X,
-  "responsiveness_{first_label_lower}": 0.X,
-  "responsiveness_{second_label_lower}": 0.X,
-  "development_{first_label_lower}": 0.X,
-  "development_{second_label_lower}": 0.X,
-  "reasoning": "dimension-by-dimension explanation"
+  "accuracy_split": 0-100,
+  "responsiveness_split": 0-100,
+  "development_split": 0-100,
+  "reasoning": "dimension-by-dimension explanation citing specific claims"
 }}"""
 
-# Example of expected output:
+# Example of expected output (allocation format — A gets split %, B gets 100-split %):
 EXAMPLE_OUTPUT = """
 {
-  "accuracy_a": 0.7,
-  "accuracy_b": 0.6,
-  "responsiveness_a": 0.8,
-  "responsiveness_b": 0.2,
-  "development_a": 0.7,
-  "development_b": 0.3,
-  "reasoning": "A: High accuracy with solid evidence. Directly addressed B's main points about X. Refined position after B's challenge. B: Generally accurate but made unsupported claim about Y. Did not respond to A's refutation. Argument unchanged from opening."
+  "accuracy_split": 70,
+  "responsiveness_split": 80,
+  "development_split": 70,
+  "reasoning": "A: solid evidence, directly addressed B's core claim about X, refined position. B: made unsupported claim about Y, did not respond to A's refutation, argument static."
 }
 """
 
@@ -67,7 +59,7 @@ COMPARATIVE_CONTEXT_BLOCK = """--- Prior Round Scores ---
 Previous confidence: A={prior_conf_a:.0%}, B={prior_conf_b:.0%}  (gap: {prior_gap:.0%})
 
 CONTEXT: These are scores from the PREVIOUS iteration of this debate.
-- If an argument is substantively the same as before, cap DEVELOPMENT at 0.3.
-- If an argument directly rebuts a prior weakness, reward development (0.7+).
+- If an argument is substantively the same as before, cap DEVELOPMENT split at 30 (out of 100).
+- If an argument directly rebuts a prior weakness, reward development (70+ out of 100).
 
 """

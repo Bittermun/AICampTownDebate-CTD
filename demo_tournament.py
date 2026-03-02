@@ -9,6 +9,7 @@ Run with:
 import argparse
 from pathlib import Path
 
+import json
 from src.config_loader import load_config, get_default_config
 from src.models import Debater, DebaterConfig
 from src.models.judge import LLMJudge, JudgeConfig, EnsembleJudge, ConsensusJudge
@@ -16,6 +17,8 @@ from src.arena.tournament import Tournament, EconomyParams
 from src.arena.observers import MetricsObserver
 from src.runtime import normalize_model_path, run_preflight, print_preflight
 from src.analysis import evaluate_judge_variance, evaluate_judge_calibration
+from src.analysis.selection_health import compute_selection_health
+from src.integrations.match_registry import MatchRegistry
 
 
 def main():
@@ -263,7 +266,44 @@ def main():
     
     # Save observer metrics
     observer.save(str(output_dir / "tournament_metrics.json"))
-    
+
+    # ── Selection Health Dashboard ─────────────────────────────────────────────
+    try:
+        transcript_path = output_dir / "tournament_results_transcript.json"
+        ledger_path = output_dir / "tournament_results_ledger.json"
+        if transcript_path.exists():
+            with open(transcript_path, encoding="utf-8") as f:
+                transcript_data = json.load(f)
+            ledger_data = json.loads(ledger_path.read_text(encoding="utf-8")) if ledger_path.exists() else None
+            health = compute_selection_health(transcript_data, ledger=ledger_data)
+            print(f"\n{'─'*60}")
+            print("  SELECTION HEALTH DASHBOARD")
+            print(f"{'─'*60}")
+            print(f"  Health Score:        {health.health_score:.3f}  (0=degenerate, 1=ideal)")
+            print(f"  Judge Margin Mean:   {health.judge_margin_mean:.3f}  stdev={health.judge_margin_stdev:.3f}")
+            print(f"  Adaptation (↑loss):  {health.adaptation_gain_after_loss:+.3f}  (positive = recovery)")
+            print(f"  Economy Reasoning:   {health.economy_reasoning_rate:.1%}  (deliberation mentions tokens/budget)")
+            print(f"  Pass Rate:           {health.pass_rate:.1%}  (target ~35%)")
+            print(f"  Aggression Rate:     {health.aggression_rate:.1%}")
+            print(f"  Avg Iterations:      {health.avg_iterations:.1f}")
+            print(f"  Judge Score Entropy: {health.judge_score_entropy_bits:.2f} bits  (higher = richer signal)")
+            print(f"{'─'*60}")
+    except Exception as e:
+        print(f"  [Health dashboard error: {e}]")
+
+    # ── Match Registry — persistent cross-session storage ─────────────────────
+    try:
+        registry = MatchRegistry()
+        config_label = getattr(args, "config", None) or f"default_{args.model}"
+        run_id = registry.log_tournament(
+            result,
+            health_report=health if "health" in dir() else None,
+            config_label=config_label,
+        )
+        registry.print_leaderboard(limit=5)
+    except Exception as e:
+        print(f"  [Match registry error: {e}]")
+
     print(f"\nResults saved to {output_dir}")
 
 

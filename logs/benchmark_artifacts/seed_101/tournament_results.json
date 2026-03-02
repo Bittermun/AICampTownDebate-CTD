@@ -8,15 +8,15 @@
     {
       "round_id": 1,
       "topic": "Does increasing the number of parameters always improve an LLM's factual accuracy?",
-      "confidence_a": 0.55,
-      "confidence_b": 0.45000000000000007,
-      "tokens_a": 94.0,
-      "tokens_b": 86.00000000000001,
-      "bets": 1
+      "confidence_a": 0.5,
+      "confidence_b": 0.5,
+      "tokens_a": 85.0,
+      "tokens_b": 85.0,
+      "bets": 0
     }
   ],
   "final_balances": {
-    "Debater_Alpha": 444.0,
-    "Debater_Beta": 425.5
+    "Debater_Alpha": 435.0,
+    "Debater_Beta": 435.0
   }
 }

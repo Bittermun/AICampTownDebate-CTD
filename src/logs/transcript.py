@@ -45,6 +45,10 @@ class RoundTranscript:
         decision: str, 
         amount: float, 
         reasoning: str,
+        intent: str = "",
+        intent_mix: list | None = None,
+        rule_refs_used: list[str] | None = None,
+        rationale_short: str = "",
         include_context: bool = False,
         balance: float = 0,
         confidence_self: float = 0,
@@ -58,17 +62,24 @@ class RoundTranscript:
         If include_context=True, also logs the full strategic context
         (balance, standing, argument summaries) for debugging.
         """
+        intent_line = f" | **Intent**: {intent}" if intent else ""
+        refs_line = f"\n**Rule Refs**: {', '.join(rule_refs_used)}" if rule_refs_used else ""
+        mix_line = f"\n**Intent Mix**: {json.dumps(intent_mix)}" if intent_mix else ""
+        short_line = f"\n**Rationale Short**: {rationale_short}" if rationale_short else ""
         if include_context:
             content = (
                 f"**Balance**: {balance:.0f} tokens | "
                 f"**Standing**: {confidence_self:.0%} vs {confidence_opponent:.0%}\n"
                 f"**Own Argument (summary)**: {own_summary[:200]}...\n"
                 f"**Opponent (summary)**: {opponent_summary[:200]}...\n\n"
-                f"**Decision**: {decision.upper()} (bet: {amount:.1f} tokens) | **Max Budget**: {max_budget:.1f} tokens\n"
-                f"**Reasoning**: {reasoning}"
+                f"**Decision**: {decision.upper()} (bet: {amount:.1f} tokens){intent_line} | **Max Budget**: {max_budget:.1f} tokens\n"
+                f"**Reasoning**: {reasoning}{short_line}{refs_line}{mix_line}"
             )
         else:
-            content = f"**Decision**: {decision.upper()} (bet: {amount:.1f} tokens) | **Max Budget**: {max_budget:.1f} tokens\n**Reasoning**: {reasoning}"
+            content = (
+                f"**Decision**: {decision.upper()} (bet: {amount:.1f} tokens){intent_line} | **Max Budget**: {max_budget:.1f} tokens\n"
+                f"**Reasoning**: {reasoning}{short_line}{refs_line}{mix_line}"
+            )
         
         self.turns.append(Turn(
             speaker=speaker,

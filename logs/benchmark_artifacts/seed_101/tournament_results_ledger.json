@@ -2,12 +2,12 @@
   "initial_balance": 350,
   "max_debt": 50,
   "balances": {
-    "Debater_Alpha": 444.0,
-    "Debater_Beta": 425.5
+    "Debater_Alpha": 435.0,
+    "Debater_Beta": 435.0
   },
   "transactions": [
     {
-      "timestamp": "2026-02-21T16:05:44.201043",
+      "timestamp": "2026-03-01T18:59:56.089691",
       "from": null,
       "to": "Debater_Alpha",
       "amount": 350,
@@ -15,7 +15,7 @@
       "round": 0
     },
     {
-      "timestamp": "2026-02-21T16:05:44.201066",
+      "timestamp": "2026-03-01T18:59:56.089726",
       "from": null,
       "to": "Debater_Beta",
       "amount": 350,
@@ -23,50 +23,34 @@
       "round": 0
     },
     {
-      "timestamp": "2026-02-21T16:05:44.201249",
+      "timestamp": "2026-03-01T18:59:56.090011",
       "from": null,
       "to": "Debater_Alpha",
-      "amount": 22.500000000000004,
+      "amount": 25.0,
       "reason": "initial_bounty",
       "round": 1
     },
     {
-      "timestamp": "2026-02-21T16:05:44.201252",
+      "timestamp": "2026-03-01T18:59:56.090015",
       "from": null,
       "to": "Debater_Beta",
-      "amount": 27.500000000000004,
+      "amount": 25.0,
       "reason": "initial_bounty",
       "round": 1
     },
     {
-      "timestamp": "2026-02-21T16:05:44.201288",
-      "from": "Debater_Beta",
-      "to": null,
-      "amount": 10,
-      "reason": "bet_stake",
-      "round": 1
-    },
-    {
-      "timestamp": "2026-02-21T16:05:44.201291",
-      "from": "Debater_Beta",
-      "to": null,
-      "amount": 0.5,
-      "reason": "bet_fee",
-      "round": 1
-    },
-    {
-      "timestamp": "2026-02-21T16:05:44.201352",
+      "timestamp": "2026-03-01T18:59:56.090055",
       "from": null,
       "to": "Debater_Alpha",
-      "amount": 71.5,
+      "amount": 60.0,
       "reason": "pot_split",
       "round": 1
     },
     {
-      "timestamp": "2026-02-21T16:05:44.201354",
+      "timestamp": "2026-03-01T18:59:56.090057",
       "from": null,
       "to": "Debater_Beta",
-      "amount": 58.50000000000001,
+      "amount": 60.0,
       "reason": "pot_split",
       "round": 1
     }

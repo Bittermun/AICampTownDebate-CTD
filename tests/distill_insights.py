@@ -115,7 +115,7 @@ def distill():
             speaker = d.get("speaker", "")
             content = d.get("content", "")
             
-            action = "PASS" if "Decision**: PASS" in content else "RESPOND"
+            action = "PASS" if ("Decision**: PASS" in content or "Decision**: HOLD" in content) else "RESPOND"
             
             m_bal = re.search(r"\*\*Balance\*\*: ([\d\.-]+)", content)
             bal = float(m_bal.group(1)) if m_bal else 200

@@ -159,7 +159,7 @@ def compute_selection_health(
             if decision:
                 total_decisions += 1
                 round_last_decision[t.get("speaker", "unknown")] = decision
-                if decision == "PASS":
+                if decision in {"PASS", "HOLD"}:
                     total_pass += 1
                 elif decision == "RESPOND":
                     total_respond += 1
@@ -175,8 +175,8 @@ def compute_selection_health(
             iter_counts.append(round_max_iter)
 
         if round_last_decision:
-            # Mutual pass if all recorded final decisions in round are PASS.
-            if all(d == "PASS" for d in round_last_decision.values()):
+            # Treat HOLD as pass-equivalent for mutual-pass semantics.
+            if all(d in {"PASS", "HOLD"} for d in round_last_decision.values()):
                 mutual_pass_rounds += 1
 
         # Final judgment in round.

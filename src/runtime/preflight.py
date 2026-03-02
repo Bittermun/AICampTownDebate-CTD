@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Iterable, List
 
 from ..models.ollama_backend import get_backend, OllamaConfig
+from ..models.openai_compat_backend import OpenAICompatBackend, OpenAICompatConfig
 from ..models.vllm_backend import VLLMBackend, VLLMConfig
 
 
@@ -23,7 +24,7 @@ def normalize_model_path(model: str) -> str:
         return "stub"
     if ":" in model:
         prefix = model.split(":", 1)[0]
-        if prefix in {"ollama", "vllm", "stub"}:
+        if prefix in {"ollama", "vllm", "openai", "stub"}:
             return model
     return f"ollama:{model}"
 
@@ -33,6 +34,8 @@ def backend_from_model_path(model_path: str) -> str:
         return "ollama"
     if model_path.startswith("vllm:"):
         return "vllm"
+    if model_path.startswith("openai:"):
+        return "openai_compat"
     if model_path == "stub" or model_path.startswith("stub:"):
         return "stub"
     return "llama_cpp"
@@ -67,6 +70,17 @@ def _check_llama_cpp(model_path: str) -> tuple[bool, str]:
     return True, "llama.cpp model path exists"
 
 
+def _check_openai_compat(model_path: str) -> tuple[bool, str]:
+    model_name = model_path.split(":", 1)[1]
+    backend = OpenAICompatBackend(OpenAICompatConfig(model=model_name))
+    if not backend.is_available():
+        return False, "OpenAI-compatible endpoint unavailable"
+    available_models = backend.list_models()
+    if available_models and model_name not in available_models:
+        return False, f"OpenAI-compatible model '{model_name}' not exposed by /v1/models"
+    return True, "OpenAI-compatible endpoint available"
+
+
 def check_model(label: str, configured_model: str) -> ModelCheckResult:
     resolved = normalize_model_path(configured_model)
     backend = backend_from_model_path(resolved)
@@ -78,6 +92,9 @@ def check_model(label: str, configured_model: str) -> ModelCheckResult:
         return ModelCheckResult(label, configured_model, resolved, backend, ok, detail)
     if backend == "vllm":
         ok, detail = _check_vllm(resolved)
+        return ModelCheckResult(label, configured_model, resolved, backend, ok, detail)
+    if backend == "openai_compat":
+        ok, detail = _check_openai_compat(resolved)
         return ModelCheckResult(label, configured_model, resolved, backend, ok, detail)
 
     ok, detail = _check_llama_cpp(resolved)

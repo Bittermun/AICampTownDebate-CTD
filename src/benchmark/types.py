@@ -25,6 +25,8 @@ class GroupScoreResult:
     pass_group: bool
     metric_means_raw: Dict[str, float] = field(default_factory=dict)
     metric_means_transformed: Dict[str, float] = field(default_factory=dict)
+    metric_sources: Dict[str, str] = field(default_factory=dict)
+    score_source: str = "fixture_static"
     reasons: List[str] = field(default_factory=list)
     item_count: int = 0
     degraded_mode: bool = False
@@ -43,6 +45,7 @@ class SeedResult:
     group_results: Dict[str, GroupScoreResult]
     aggregate_score: float
     pass_benchmark: bool
+    counterfactual_aggregates: Dict[str, float] = field(default_factory=dict)
     benchmark_score_pass: bool = False
     gates_pass: bool = False
     trajectory_pass: bool = True
@@ -89,6 +92,7 @@ class BenchmarkRunResult:
     degraded_mode_reason: str
     elo_before_after: Dict[str, float]
     tier_before_after: Dict[str, str]
+    score_provenance: Dict[str, Any] = field(default_factory=dict)
     artifact_paths: Dict[str, str] = field(default_factory=dict)
     run_metadata: Dict[str, Any] = field(default_factory=dict)
     notes: List[str] = field(default_factory=list)
@@ -102,6 +106,7 @@ class BenchmarkRunResult:
                 {
                     "seed": s.seed,
                     "aggregate_score": s.aggregate_score,
+                    "counterfactual_aggregates": s.counterfactual_aggregates,
                     "pass_benchmark": s.pass_benchmark,
                     "benchmark_score_pass": s.benchmark_score_pass,
                     "gates_pass": s.gates_pass,
@@ -118,6 +123,8 @@ class BenchmarkRunResult:
                             "metric_means": r.metric_means,
                             "metric_means_raw": r.metric_means_raw,
                             "metric_means_transformed": r.metric_means_transformed,
+                            "metric_sources": r.metric_sources,
+                            "score_source": r.score_source,
                             "pass_group": r.pass_group,
                             "reasons": r.reasons,
                             "item_count": r.item_count,
@@ -148,6 +155,7 @@ class BenchmarkRunResult:
             "degraded_mode_reason": self.degraded_mode_reason,
             "elo_before_after": self.elo_before_after,
             "tier_before_after": self.tier_before_after,
+            "score_provenance": self.score_provenance,
             "artifact_paths": self.artifact_paths,
             "run_metadata": self.run_metadata,
             "notes": self.notes,

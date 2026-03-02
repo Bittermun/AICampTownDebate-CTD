@@ -54,6 +54,7 @@ def main() -> int:
         choices=["default", "core_live_stretch_fixture", "all_live", "all_fixture"],
     )
     parser.add_argument("--run-label", default=None)
+    parser.add_argument("--enable-model-derived-metrics", action="store_true")
     args = parser.parse_args()
 
     policy = load_benchmark_policy(args.config)
@@ -81,6 +82,7 @@ def main() -> int:
             artifact_root=args.artifact_root,
             source_mode=args.source_mode,
             run_label=args.run_label,
+            enable_model_derived_metrics=args.enable_model_derived_metrics,
         )
     except Exception as e:
         print(f"[ERROR] benchmark run failed: {e}")

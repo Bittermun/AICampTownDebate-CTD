@@ -29,8 +29,7 @@ ENV/
 .idea/
 
 # Project Specific
-logs/*.json
-logs/*.md
+logs/**/*
 !logs/.gitkeep
 config.yaml
 !config.yaml.example

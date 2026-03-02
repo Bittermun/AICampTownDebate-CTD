@@ -371,6 +371,12 @@ class DynamicDebateRound:
             
             # Debaters decide
             current_fee_rate = min(0.05 * ctx.iteration, 0.50)
+            # Track balance history for trend signal
+            if not hasattr(ctx, '_bal_hist_a'):
+                ctx._bal_hist_a = []
+                ctx._bal_hist_b = []
+            ctx._bal_hist_a.append(balance_a)
+            ctx._bal_hist_b.append(balance_b)
             ctx.decision_a = self.debater_a.decide_bet(
                 balance_a,
                 ctx.combined_b,
@@ -379,6 +385,8 @@ class DynamicDebateRound:
                 confidence_opponent=ctx.current_judgment.confidence_b,
                 balance_change=balance_change_a,
                 current_fee_rate=current_fee_rate,
+                last_judgment_reasoning=ctx.current_judgment.reasoning if ctx.current_judgment else None,
+                balance_history=getattr(ctx, '_bal_hist_a', None),
             )
             
             ctx.decision_b = self.debater_b.decide_bet(
@@ -389,6 +397,8 @@ class DynamicDebateRound:
                 confidence_opponent=ctx.current_judgment.confidence_a,
                 balance_change=balance_change_b,
                 current_fee_rate=current_fee_rate,
+                last_judgment_reasoning=ctx.current_judgment.reasoning if ctx.current_judgment else None,
+                balance_history=getattr(ctx, '_bal_hist_b', None),
             )
             
             # Deduct deliberation costs (thinking is not free!)
@@ -413,13 +423,27 @@ class DynamicDebateRound:
             balance_a = self.ledger.balance(self.debater_a.name)
             balance_b = self.ledger.balance(self.debater_b.name)
 
+            # Normalize invalid RESPOND actions before logging/counting.
+            # This prevents "respond without stake" when min-bet or affordability
+            # constraints reject the intended bet.
+            ctx.decision_a = self._normalize_response_decision(
+                ctx.decision_a, self.debater_a.name, balance_a, current_fee_rate
+            )
+            ctx.decision_b = self._normalize_response_decision(
+                ctx.decision_b, self.debater_b.name, balance_b, current_fee_rate
+            )
+
             
             if transcript:
                 transcript.add_deliberation(
                     self.debater_a.name,
-                    ctx.decision_a.bet_type.value,
+                    ctx.decision_a.action_label or ("HOLD" if ctx.decision_a.bet_type == BetType.PASS else "RESPOND"),
                     ctx.decision_a.amount,
                     f"[Iter {ctx.iteration}] {ctx.decision_a.reasoning}",
+                    intent=ctx.decision_a.intent,
+                    intent_mix=ctx.decision_a.intent_mix,
+                    rule_refs_used=ctx.decision_a.rule_refs_used,
+                    rationale_short=ctx.decision_a.rationale_short,
                     include_context=True,
                     balance=balance_a,
                     confidence_self=ctx.current_judgment.confidence_a,
@@ -430,9 +454,13 @@ class DynamicDebateRound:
                 )
                 transcript.add_deliberation(
                     self.debater_b.name,
-                    ctx.decision_b.bet_type.value,
+                    ctx.decision_b.action_label or ("HOLD" if ctx.decision_b.bet_type == BetType.PASS else "RESPOND"),
                     ctx.decision_b.amount,
                     f"[Iter {ctx.iteration}] {ctx.decision_b.reasoning}",
+                    intent=ctx.decision_b.intent,
+                    intent_mix=ctx.decision_b.intent_mix,
+                    rule_refs_used=ctx.decision_b.rule_refs_used,
+                    rationale_short=ctx.decision_b.rationale_short,
                     include_context=True,
                     balance=balance_b,
                     confidence_self=ctx.current_judgment.confidence_b,
@@ -459,11 +487,9 @@ class DynamicDebateRound:
             
             # Process bets for active participants
             if ctx.decision_a.bet_type != BetType.PASS:
-                ctx.bet_count_a += 1
                 ctx = self._process_bet(ctx, transcript, is_debater_a=True)
             
             if ctx.decision_b.bet_type != BetType.PASS:
-                ctx.bet_count_b += 1
                 ctx = self._process_bet(ctx, transcript, is_debater_a=False)
             
             # Re-evaluate with updated combined arguments
@@ -519,6 +545,60 @@ class DynamicDebateRound:
             ctx.iterations_completed = ctx.max_iterations
         
         return ctx
+
+    def _normalize_response_decision(
+        self,
+        decision: BetDecision,
+        debater_id: str,
+        balance: float,
+        current_fee_rate: float,
+    ) -> BetDecision:
+        """Convert invalid RESPOND actions to PASS/HOLD before processing."""
+        if decision.bet_type != BetType.RESPOND:
+            return decision
+
+        amount = max(0.0, float(decision.amount))
+        min_bet = float(self.betting.min_bet)
+        fee = amount * current_fee_rate
+        total_cost = amount + fee
+
+        if amount < min_bet:
+            return BetDecision(
+                bet_type=BetType.PASS,
+                amount=0.0,
+                reasoning=(
+                    f"[BET_REJECTED_MIN] amount={amount:.2f} < min_bet={min_bet:.2f}. "
+                    f"{decision.reasoning}"
+                ),
+                llm_tokens_used=decision.llm_tokens_used,
+                max_budget=0.0,
+                use_search=False,
+                intent=decision.intent,
+                intent_mix=decision.intent_mix,
+                rule_refs_used=decision.rule_refs_used,
+                rationale_short=decision.rationale_short,
+                action_label="HOLD",
+            )
+
+        if not self.ledger.can_afford(debater_id, total_cost):
+            return BetDecision(
+                bet_type=BetType.PASS,
+                amount=0.0,
+                reasoning=(
+                    f"[BET_REJECTED_FUNDS] balance={balance:.2f}, required={total_cost:.2f}. "
+                    f"{decision.reasoning}"
+                ),
+                llm_tokens_used=decision.llm_tokens_used,
+                max_budget=0.0,
+                use_search=False,
+                intent=decision.intent,
+                intent_mix=decision.intent_mix,
+                rule_refs_used=decision.rule_refs_used,
+                rationale_short=decision.rationale_short,
+                action_label="HOLD",
+            )
+
+        return decision
     
     def _process_bet(
         self,
@@ -549,6 +629,10 @@ class DynamicDebateRound:
         if bet:
             ctx.all_bets.append(bet)
             ctx.locked_pot += bet.amount
+            if is_debater_a:
+                ctx.bet_count_a += 1
+            else:
+                ctx.bet_count_b += 1
             # Track bet amount for metrics
             if is_debater_a:
                 ctx.total_bet_amount_a += decision.amount
@@ -646,50 +730,50 @@ class DynamicDebateRound:
         
         ctx.tokens_awarded_a += dist.tokens_a
         ctx.tokens_awarded_b += dist.tokens_b
-        
+
+        # Resolve bets independent of transcript logging.
+        # In dynamic mode, "winning" means final confidence > initial confidence.
+        bets_a = [b for b in ctx.all_bets if b.bettor_id == self.debater_a.name]
+        bets_b = [b for b in ctx.all_bets if b.bettor_id == self.debater_b.name]
+        won_a = ctx.current_judgment.confidence_a > ctx.initial_judgment.confidence_a
+        won_b = ctx.current_judgment.confidence_b > ctx.initial_judgment.confidence_b
+
+        # Resolve bets for debater A - convex (sqrt-shaped) reward curve:
+        #   5pt improvement -> 1.07x | 20pt -> 2.00x | 30pt -> 2.73x | 40pt+ -> 3.00x cap
+        for bet in bets_a:
+            if won_a:
+                improvement_a = ctx.current_judgment.confidence_a - ctx.initial_judgment.confidence_a
+                multiplier = 1.0 + min(2.0, (max(0.0, improvement_a) * 10) ** 0.5)
+            else:
+                multiplier = 1.0
+            self.betting.resolve_bet(bet, won_a, multiplier, self.ledger)
+
+        # Resolve bets for debater B (same convex curve).
+        for bet in bets_b:
+            if won_b:
+                improvement_b = ctx.current_judgment.confidence_b - ctx.initial_judgment.confidence_b
+                multiplier = 1.0 + min(2.0, (max(0.0, improvement_b) * 10) ** 0.5)
+            else:
+                multiplier = 1.0
+            self.betting.resolve_bet(bet, won_b, multiplier, self.ledger)
+
         if transcript:
             transcript.tokens_awarded_a += dist.tokens_a
             transcript.tokens_awarded_b += dist.tokens_b
-            
-            # Log bet resolutions for each debater
-            # In dynamic mode, "winning" means final confidence > initial confidence
-            bets_a = [b for b in ctx.all_bets if b.bettor_id == self.debater_a.name]
-            bets_b = [b for b in ctx.all_bets if b.bettor_id == self.debater_b.name]
-            
-            # Determine winners
-            won_a = ctx.current_judgment.confidence_a > ctx.initial_judgment.confidence_a
-            won_b = ctx.current_judgment.confidence_b > ctx.initial_judgment.confidence_b
-            
-            # Resolve bets for debater A — convex (sqrt-shaped) reward curve:
-            #   5pt improvement  → 1.07x  |  20pt → 2.00x  |  30pt → 2.73x  |  40pt+ → 3.00x cap
-            for bet in bets_a:
-                if won_a:
-                    improvement_a = ctx.current_judgment.confidence_a - ctx.initial_judgment.confidence_a
-                    multiplier = 1.0 + min(2.0, (max(0.0, improvement_a) * 10) ** 0.5)
-                else:
-                    multiplier = 1.0
-                self.betting.resolve_bet(bet, won_a, multiplier, self.ledger)
-            
-            # Resolve bets for debater B (same convex curve)
-            for bet in bets_b:
-                if won_b:
-                    improvement_b = ctx.current_judgment.confidence_b - ctx.initial_judgment.confidence_b
-                    multiplier = 1.0 + min(2.0, (max(0.0, improvement_b) * 10) ** 0.5)
-                else:
-                    multiplier = 1.0
-                self.betting.resolve_bet(bet, won_b, multiplier, self.ledger)
-            
-            # Log to transcript
+
+            # Log bet resolution using actual bet payout, not pot split payout.
             if bets_a:
                 total_fee_a = sum(b.fee_paid for b in bets_a)
+                payout_a = sum(b.payout for b in bets_a)
                 transcript.add_bet_resolution(
-                    self.debater_a.name, won_a, dist.tokens_a, fee_paid=total_fee_a
+                    self.debater_a.name, won_a, payout_a, fee_paid=total_fee_a
                 )
-            
+
             if bets_b:
                 total_fee_b = sum(b.fee_paid for b in bets_b)
+                payout_b = sum(b.payout for b in bets_b)
                 transcript.add_bet_resolution(
-                    self.debater_b.name, won_b, dist.tokens_b, fee_paid=total_fee_b
+                    self.debater_b.name, won_b, payout_b, fee_paid=total_fee_b
                 )
         
         return ctx

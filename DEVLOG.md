@@ -1,529 +1,48 @@
-## 2026-02-22 | Fixed Insight Distiller
-**Hypothesis:** The insight distiller script (	ests/distill_insights.py) was failing with TypeError due to structural changes in 	ournament_results.json after adopting the dynamic debate round.
-**Change:** Rewrote 	ests/distill_insights.py to parse the rich structured data directly from 	ournament_results_transcript.json instead. This correctly extracts true early balances, exact bet amounts, PASS/RESPOND actions, and judge confidence shifts.
-**Result:** Script now successfully processes the data and outputs accurate analysis metrics for all 3 puzzle questions.
-**Next:** Monitor ongoing tournament and review metrics once it completes.
+﻿## 2026-03-02 | Session 24: Balanced Roadmap Reset (70/20/10) + Execution Prep
 
-## 2026-02-22 | Session 33: Iteration Run (Token Check + 3-Seed Collection)
+### Why This Session
+- We intentionally widened scope after a period of narrow benchmark plumbing focus.
+- Goal: preserve scientific rigor while reopening high-upside exploration.
 
-### What Happened
-- Validated current environment after receiving HF token input.
-- vLLM preflight still fails locally (server unavailable).
-- HF Hub HTTPS still intermittently blocked in this environment (`WinError 10013`), causing core-live mode retries/timeouts.
-- Proceeded with stable collection path (`all_fixture`) to continue data gathering without blocking.
+### Balanced Roadmap (12 Weeks)
 
-### Runs Executed
-1. Core-live test attempt:
-   - `python scripts/run_phase1_batch.py --model-id ollama:qwen2.5:7b --judge-model ollama:qwen2.5:7b --seeds 101 --matrix-labels set01 --source-mode core_live_stretch_fixture --concurrency 2 --bankruptcy-retries 1`
-   - Result: timed out due to HF connectivity retries.
-2. 3-seed collection (stable fixture mode):
-   - `python scripts/run_phase1_batch.py --model-id ollama:qwen2.5:7b --judge-model ollama:qwen2.5:7b --seeds 101,202,303 --matrix-labels set01 --source-mode all_fixture --concurrency 1 --bankruptcy-retries 1`
-   - Batch ID: `20260222T031247Z`
+#### 70% Core (Must-Win)
+1. **Evidence Engine**
+   - Standardize dual-lane scoring (`fixture_static` + `model_derived`) and claim packet outputs.
+   - Add uplift confidence reporting for decision quality.
+2. **Closed-Loop Economy Control**
+   - Auto-tune fee/min-bet/token issuance to maintain target entropy + adaptation behavior bands.
+3. **Population Arena**
+   - Move from fixed A/B into multi-model Swiss/challenger scheduling.
 
-### Aggregate Results (Batch 20260222T031247Z)
-- `runs`: 3
-- `final_pass_rate`: 0.0
-- `benchmark_score_pass_rate`: 0.0
-- `gates_pass_rate`: 1.0
-- `validity_pass_rate`: 1.0
-- `bankruptcy_rate`: 0.0
-- `degraded_mode_rate`: 1.0
-- `live_source_failure_runs`: 0
+#### 20% Adjacent (Near-Term Upside)
+4. **Adversarial Robustness Track**
+   - Add attack-style benchmark slices (injection/trap/framing) as promotion gates.
+5. **Strategy Explainability Layer**
+   - Produce compact turning-point artifacts (why decisions flipped, what changed confidence).
 
-### Per-Seed Snapshot
-- Seed 101: `aggregate_score=0.594811`, `final_pass=false`, `bankrupt=false`
-- Seed 202: `aggregate_score=0.594811`, `final_pass=false`, `bankrupt=false`
-- Seed 303: `aggregate_score=0.594811`, `final_pass=false`, `bankrupt=false`
+#### 10% Moonshot
+6. **Parliament/Coalition Mode**
+   - Prototype multi-agent coalition + minority-report governance dynamic.
 
-### Interpretation
-- Pipeline and validity gates are stable in batch mode.
-- No bankruptcy events observed across 3 seeds in this fixture collection.
-- Main blocker to core-live collection remains network-level HF access behavior in this environment, not benchmark orchestration logic.
+### Worth-It Prioritization (Current Recommendation)
+- **Highest ROI now:** Evidence Engine -> Closed-Loop Economy -> Population Arena.
+- **Strong but second wave:** Robustness Track, then Explainability Layer.
+- **Exploratory only:** Parliament mode (timeboxed spike, continue only if measurable new signal appears).
 
-### Artifacts
-- `logs/benchmark_batches/20260222T031247Z/aggregate_report.json`
-- `logs/benchmark_batches/20260222T031247Z/batch_manifest.json`
-- `logs/benchmark_batches/20260222T031247Z/batch_summary.jsonl`
-## 2026-02-22 | Session 32: Data Gathering Started (Phase A Shakedown)
+### Elegant Implementation Prep
+1. Keep one canonical artifact contract (summary, provenance, uplift, invariants).
+2. Add one feature flag per new lane to keep baseline reproducible.
+3. Require seed-level reproducibility before enabling policy gates.
+4. Add kill criteria per track (pause after two sprints with no measurable movement).
 
-### Run Executed
-- Command:
-  - `python scripts/run_phase1_batch.py --model-id ollama:qwen2.5:7b --judge-model ollama:qwen2.5:7b --seeds 101 --matrix-labels set01 --source-mode all_fixture --concurrency 1 --bankruptcy-retries 1`
-- Batch ID:
-  - `20260222T005117Z`
-- Output root:
-  - `logs/benchmark_batches/20260222T005117Z/`
-
-### Why `all_fixture` in this run
-- Attempted `core_live_stretch_fixture` first, but HF connectivity in this environment repeatedly failed (`WinError 10013`) and the command timed out.
-- Used fixture mode to start data gathering immediately and validate pipeline throughput + artifact integrity.
-
-### Aggregate Results
-- `runs`: 1
-- `final_pass_rate`: 0.0
-- `benchmark_score_pass_rate`: 0.0
-- `gates_pass_rate`: 1.0
-- `validity_pass_rate`: 1.0
-- `bankruptcy_rate`: 0.0
-- `degraded_mode_rate`: 1.0
-- `live_source_failure_runs`: 0
-
-### Per-Run Outcome (seed101_set01)
-- `return_code`: 2
-- `pass_fail`: fail
-- `final_pass`: false
-- `benchmark_score_pass`: false
-- `gates_pass`: true
-- `validity_pass`: true
-- `aggregate_score`: 0.594811
-- `bankrupt`: false
-- `degraded_mode`: true (`fixture-backed datasets in benchmark policy`)
-
-### Key Group Scores
-- `truth_core_core`: 0.630000 (pass)
-- `truth_core_stretch`: 0.600000 (pass, non-blocking)
-- `reasoning_core`: 0.586667 (pass)
-- `adversarial_robustness`: 0.626250 (pass)
-- `economy_adaptation`: 0.518472 (pass)
-- Aggregate below policy minimum (`0.594811 < 0.60`) caused benchmark score fail.
-
-### Artifacts
-- Batch aggregate: `logs/benchmark_batches/20260222T005117Z/aggregate_report.json`
-- Batch manifest: `logs/benchmark_batches/20260222T005117Z/batch_manifest.json`
-- Run summary: `logs/benchmark_batches/20260222T005117Z/seed101_set01/attempt_1/benchmark_summary.json`
-## 2026-02-22 | Session 31: Batch Data-Gathering Infrastructure (Isolation + Source Modes + Bankruptcy Retry)
-
-### What Happened
-- Implemented the execution plan for scalable benchmark data gathering with safe parallelism.
-- Added run-isolated artifact roots, source-mode overrides, batch orchestration, and retry-once bankruptcy handling.
-- Verified batch runner end-to-end with a one-seed shakedown run.
-
-### Files Changed
-- `src/benchmark/runner.py`
-- `tests/run_phase1_benchmark.py`
-- `src/benchmark/batch_utils.py` (new)
-- `scripts/run_phase1_batch.py` (new)
-- `scripts/run_phase1_batch.ps1` (new)
-- `tests/analyze_phase1_batch.py` (new)
-- `tests/test_benchmark_source_mode_overrides.py` (new)
-- `tests/test_benchmark_artifact_isolation.py` (new)
-- `tests/test_benchmark_batch_utils.py` (new)
-
-### Implementation Details
-1. **Run isolation for parallel safety**
-   - Added `artifact_root` support through CLI + runner.
-   - Seed artifacts now write under `<artifact_root>/benchmark_artifacts/seed_<seed>/...`.
-2. **Source mode overrides**
-   - Added source mode control with options:
-     - `default`
-     - `core_live_stretch_fixture`
-     - `all_live`
-     - `all_fixture`
-   - Wired through `run_phase1` and CLI.
-3. **Batch runner**
-   - Added `scripts/run_phase1_batch.py` with:
-     - matrix execution over `seeds x matrix_labels`
-     - configurable concurrency
-     - per-run isolated summary/registry/artifact paths
-     - batch manifest + JSONL run summary + aggregate report
-4. **Bankruptcy retry policy**
-   - Implemented `retry-once-then-mark` policy.
-   - Bankruptcy detection reads per-seed tournament result final balances from benchmark summary artifact refs.
-5. **Aggregation utility**
-   - Added `tests/analyze_phase1_batch.py` to aggregate JSONL into a compact report.
-
-### Validation
-- Passed:
-  - `python tests/test_benchmark_source_mode_overrides.py`
-  - `python tests/test_benchmark_artifact_isolation.py`
-  - `python tests/test_benchmark_batch_utils.py`
-  - `python tests/test_benchmark_config_parse.py`
-  - `python tests/test_benchmark_nonblocking_groups.py`
-  - `python tests/test_phase1_benchmark_smoke.py`
-  - `python tests/test_benchmark_runner_validity.py`
-  - `python tests/test_benchmark_gate_semantics.py`
-  - `python tests/test_benchmark_registry.py`
-  - `python -m py_compile src/benchmark/runner.py src/benchmark/batch_utils.py tests/run_phase1_benchmark.py scripts/run_phase1_batch.py tests/analyze_phase1_batch.py tests/test_benchmark_source_mode_overrides.py tests/test_benchmark_artifact_isolation.py tests/test_benchmark_batch_utils.py`
-- End-to-end shakedown executed:
-  - `python scripts/run_phase1_batch.py --model-id stub --judge-model stub --seeds 101 --matrix-labels set01 --allow-stub --source-mode all_fixture --concurrency 1`
-  - Output directory example:
-    - `logs/benchmark_batches/20260222T000521Z/`
-
-### Known Limits
-- Batch script currently uses matrix labels as run partition keys; it does not yet mutate tournament topic lists per label automatically.
-- Full strict live wave still depends on external HF reachability and gated dataset access policy.
-## 2026-02-21 | Session 30: Staged Truth-Core Difficulty (Blocking Core + Stretch GPQA)
-
-### What Happened
-- Implemented staged truth-core difficulty so GPQA is retained as a stretch signal but no longer blocks baseline benchmark bring-up.
-- Added explicit group-level `blocking` semantics in benchmark policy parsing and runner pass logic.
-
-### Files Changed
-- `src/benchmark/config_models.py`
-- `src/benchmark/runner.py`
-- `configs/benchmark_phase1.yaml`
-- `tests/test_benchmark_config_parse.py`
-- `tests/test_benchmark_nonblocking_groups.py` (new)
-- `tests/test_benchmark_runner_validity.py`
-- `tests/test_benchmark_gate_semantics.py`
-- `tests/test_phase1_benchmark_smoke.py`
-- `benchmarks/fixtures/truth_core_core/mmlu_pro.jsonl` (new copy)
-- `benchmarks/fixtures/truth_core_core/truthfulqa.jsonl` (new copy)
-- `benchmarks/fixtures/truth_core_stretch/gpqa.jsonl` (new copy)
-
-### Policy + Runner Changes
-1. **Group-level blocking flag**
-   - Added `GroupPolicy.blocking: bool = True`.
-   - YAML parsing now supports per-group `blocking` with backward-compatible default `true`.
-2. **Benchmark score pass behavior**
-   - `score_pass` now requires group pass only for groups where `blocking=true`.
-   - Aggregate scoring semantics remain unchanged.
-3. **Truth-core split**
-   - `truth_core` split into:
-     - `truth_core_core` (blocking=true): MMLU-Pro + TruthfulQA
-     - `truth_core_stretch` (blocking=false): GPQA
-   - GPQA kept in policy as stretch signal.
-
-### Test Hardening for Offline/Stub Runs
-- Updated benchmark tests that run stub mode to explicitly disable live HF fields in-memory/temp config.
-- This avoids long HF retries in offline test environments and keeps CI deterministic.
-
-### Validation
-- Passed:
-  - `python tests/test_benchmark_config_parse.py`
-  - `python tests/test_benchmark_nonblocking_groups.py`
-  - `python tests/test_benchmark_gate_semantics.py`
-  - `python tests/test_benchmark_runner_validity.py`
-  - `python tests/test_benchmark_scoring.py`
-  - `python tests/test_benchmark_datasets.py`
-  - `python tests/test_benchmark_live_failure_policy.py`
-  - `python tests/test_phase1_benchmark_smoke.py`
-  - `python tests/test_benchmark_registry.py`
-  - `python -m py_compile src/benchmark/config_models.py src/benchmark/runner.py tests/test_benchmark_config_parse.py tests/test_benchmark_nonblocking_groups.py tests/test_benchmark_runner_validity.py tests/test_benchmark_gate_semantics.py tests/test_phase1_benchmark_smoke.py`
-
-### Notes
-- Final pass philosophy remains intact (`benchmark_score_pass && gates_pass && validity_pass`).
-- This change only scopes which benchmark groups are treated as blocking for `benchmark_score_pass`.
-## 2026-02-21 | Session 29: Strict Live Seed Attempt (Environment Verification)
-
-### What Happened
-- Attempted strict live phase-1 run to verify:
-  - `live_source_failures=[]`
-  - `degraded_mode=false`
-  - non-empty `live_sources_used`
-
-### Run Attempts and Outcomes
-1. vLLM strict run attempt:
-   - Failed preflight: local vLLM server unavailable.
-2. Ollama strict run attempt:
-   - Preflight passed for model backend.
-   - Failed initially because `datasets` package was missing.
-3. Installed `datasets` successfully and retried strict run.
-4. Retried with escalated permissions for outbound access:
-   - HuggingFace access worked for at least part of truth-core pull.
-   - Strict run failed on `GPQA` because `Idavidrein/gpqa` is gated/auth-required.
-
-### Current Strict-Live Status
-- Strict live run remains blocked by dataset access control (GPQA gating), not by runner logic.
-- Therefore the three success criteria cannot be fully satisfied yet in this environment.
-
-### Exact Blocker
-- Error: `Dataset 'Idavidrein/gpqa' is a gated dataset on the Hub. You must be authenticated to access it.`
-
-### Next Action Required
-- Provide HF authentication with access to `Idavidrein/gpqa`, or
-- replace GPQA config with an ungated equivalent for strict live verification.
-## 2026-02-21 | Session 28: Live-Ingestion Hardening (Schema + Cache + Failure Policy)
-
-### What Happened
-- Implemented the reliability hardening pass requested before scale-up.
-- Added live dataset schema validation, cache lifecycle controls, strict-vs-fallback policy tests, and operator-facing live-source CLI summary output.
-
-### Files Changed
-- `src/benchmark/datasets.py`
-- `src/benchmark/runner.py`
-- `tests/run_phase1_benchmark.py`
-- `tests/test_benchmark_datasets.py`
-- `tests/test_benchmark_live_failure_policy.py`
-
-### Implementation Details
-1. **Schema/mapping validation (fail-fast)**
-   - `HFDatasetAdapter` now validates mapped columns on first fetched row before ingesting the split.
-   - Missing mapped columns raise explicit error:
-     - `Column mapping validation failed for <group>/<dataset>. Missing columns: [...]`
-2. **Cache lifecycle controls**
-   - Added `HFDatasetAdapter` controls:
-     - `force_refresh`: bypass cache and re-pull, then overwrite cache
-     - `cache_only`: pin to cache and fail on cache miss
-   - Added cache mode provenance in pull manifest (`cache_mode`: `prefer_cache|refresh|cache_only`).
-3. **Runner integration**
-   - `run_phase1()` now supports:
-     - `refresh_live_cache`
-     - `cache_only_live`
-   - These flags are passed directly into `HFDatasetAdapter`.
-4. **CLI controls + operator summary**
-   - Added benchmark CLI flags:
-     - `--refresh-live-cache`
-     - `--cache-only-live`
-   - Added concise summary line after run:
-     - live sources used count
-     - live source failures count
-     - degraded reason
-5. **Failure policy tests**
-   - Added tests for live pull failure behavior:
-     - fallback enabled + non-strict -> fixture fallback
-     - strict runtime -> hard fail
-     - fallback disabled -> hard fail
-
-### Validation
-- Passed:
-  - `python tests/test_benchmark_datasets.py`
-  - `python tests/test_benchmark_live_failure_policy.py`
-  - `python tests/test_benchmark_config_parse.py`
-  - `python tests/test_benchmark_scoring.py`
-  - `python tests/test_benchmark_runner_validity.py`
-  - `python tests/test_benchmark_gate_semantics.py`
-  - `python tests/test_phase1_benchmark_smoke.py`
-  - `python tests/test_benchmark_registry.py`
-- Failed:
-  - None in this session.
-
-### Working Commands
-- Default live mode (prefer cache):
-  - `python tests/run_phase1_benchmark.py --config configs/benchmark_phase1.yaml --tournament-config configs/vllm_tournament_recommended.yaml --model-id vllm:Qwen/Qwen2.5-7B-Instruct --judge-model vllm:Qwen/Qwen2.5-7B-Instruct --seeds 101 --offline-fixtures-dir benchmarks/fixtures`
-- Force live re-pull:
-  - `python tests/run_phase1_benchmark.py --config configs/benchmark_phase1.yaml --tournament-config configs/vllm_tournament_recommended.yaml --model-id vllm:Qwen/Qwen2.5-7B-Instruct --judge-model vllm:Qwen/Qwen2.5-7B-Instruct --seeds 101 --offline-fixtures-dir benchmarks/fixtures --refresh-live-cache`
-- Cache-only reproducibility mode:
-  - `python tests/run_phase1_benchmark.py --config configs/benchmark_phase1.yaml --tournament-config configs/vllm_tournament_recommended.yaml --model-id vllm:Qwen/Qwen2.5-7B-Instruct --judge-model vllm:Qwen/Qwen2.5-7B-Instruct --seeds 101 --offline-fixtures-dir benchmarks/fixtures --cache-only-live`
-
-### Known Limits
-- Full strict live validation still depends on real backend availability + networked HF access in execution environment.
-- First-row schema validation is intentionally lightweight; deeper semantic checks (value-level quality checks) remain out of scope for this pass.
-## 2026-02-21 | Session 27: Next-Step Plan + Status Snapshot
-
-### Current Status
-- Phase-1 benchmark now supports a single live ingestion path (HuggingFace) with fixture fallback.
-- Live pull provenance is tracked in run metadata (`live_sources_used`, `live_source_failures`, `degraded_mode_reason`, and artifact-manifest pull metadata).
-- Final benchmark semantics remain unchanged (`benchmark_score_pass` + `gates_pass` + `validity_pass` -> `final_pass`).
-
-### Achievements Carried Forward
-- Added `HFDatasetAdapter` with local cache and pull metadata.
-- Integrated source-based adapter routing in runner (`external` live path, `internal` fixture path).
-- Extended phase-1 truth-core dataset specs for live ingestion while preserving fixture compatibility.
-- Added adapter unit tests and validated benchmark-related test suite as passing.
-
-### What Should Be Done Next (Priority Order)
-1. **Run one real strict live benchmark**
-   - Execute one seed in strict mode with a real backend and confirm no fallback occurs.
-   - Success criteria:
-     - `live_source_failures=[]`
-     - `degraded_mode=false`
-     - non-empty `live_sources_used`
-2. **Stabilize truth-core HF mappings**
-   - Verify each truth-core dataset column mapping against current upstream schema.
-   - Add a mapping-validation test that fails fast on missing required columns.
-3. **Add cache lifecycle controls**
-   - Add optional flags to force refresh or pin to cached snapshot for reproducibility.
-   - Keep default behavior backward-compatible.
-4. **Harden fallback policy behavior**
-   - Add explicit tests for strict-mode hard-fail vs non-strict fallback behavior on simulated HF pull failures.
-5. **Complete reporting polish for operators**
-   - Add concise CLI summary line showing live pull count, fallback count, and degraded reason.
-
-### Known Risks
-- Upstream HF schema/split drift can silently break mappings without explicit schema checks.
-- Strict runs depend on network and local environment readiness (`datasets` package + backend availability).
-
-### Recommended Working Command (Strict Live Check)
-- `python tests/run_phase1_benchmark.py --config configs/benchmark_phase1.yaml --tournament-config configs/vllm_tournament_recommended.yaml --model-id vllm:Qwen/Qwen2.5-7B-Instruct --judge-model vllm:Qwen/Qwen2.5-7B-Instruct --seeds 101 --offline-fixtures-dir benchmarks/fixtures`
-## 2026-02-21 | Session 26: Phase-1 Live HF Ingestion (Truth-Core First)
-
-### What Happened
-- Added a single live ingestion path for benchmark datasets via HuggingFace with local cache + provenance.
-- Kept fixture mode as the fallback path and preserved existing final pass semantics.
-- Enabled live-source fields only for `truth_core` datasets in phase-1 benchmark policy.
-
-### Files Changed
-- `src/benchmark/config_models.py`
-- `src/benchmark/datasets.py`
-- `src/benchmark/runner.py`
-- `src/benchmark/types.py`
-- `configs/benchmark_phase1.yaml`
-- `tests/test_benchmark_datasets.py`
-- `tests/test_benchmark_config_parse.py`
-- `tests/run_phase1_benchmark.py`
-- `requirements.txt`
-
-### Implementation Notes
-1. **Dataset adapter upgrade**
-   - Added `HFDatasetAdapter` with the same `load(group_name, dataset_name, limit)` contract.
-   - Added support for dataset spec fields:
-     - `hf_dataset_id`
-     - `hf_subset`
-     - `split`
-     - `sample_size`
-     - `column_mapping`
-2. **Cache + provenance**
-   - Added cache directory: `benchmarks/cache/`.
-   - Per pull metadata now includes:
-     - dataset id/subset/split
-     - row count
-     - content hash
-     - fetch timestamp
-   - Emitted live pull metadata into `run_metadata.artifact_manifest.live_dataset_pulls`.
-3. **Runner integration**
-   - Dataset routing now prefers HF for `source=external` datasets that provide `hf_dataset_id`.
-   - `source=internal` stays fixture-backed.
-   - On live pull failure:
-     - strict runtime -> hard fail
-     - non-strict with fallback enabled -> fixture fallback + degraded mode annotations
-4. **Summary fields**
-   - Added explicit top-level summary fields:
-     - `live_sources_used`
-     - `live_source_failures`
-     - `degraded_mode_reason`
-   - `final_pass` logic remains unchanged.
-
-### Validation
-- Passed:
-  - `python tests/test_benchmark_datasets.py`
-  - `python tests/test_benchmark_config_parse.py`
-  - `python tests/test_benchmark_scoring.py`
-  - `python tests/test_benchmark_runner_validity.py`
-  - `python tests/test_benchmark_gate_semantics.py`
-  - `python tests/test_phase1_benchmark_smoke.py`
-  - `python tests/test_benchmark_registry.py`
-- Failed:
-  - None in this session.
-
-### Working Command (Live Mode)
-- Example command:
-  - `python tests/run_phase1_benchmark.py --config configs/benchmark_phase1.yaml --tournament-config configs/vllm_tournament_recommended.yaml --model-id vllm:Qwen/Qwen2.5-7B-Instruct --judge-model vllm:Qwen/Qwen2.5-7B-Instruct --seeds 101 --offline-fixtures-dir benchmarks/fixtures`
-
-### Known Limits
-- Live-mode correctness still depends on installed `datasets` package and network access.
-- Truth-core mappings/splits are configured, but upstream HF schema/splits can change and may require column-map updates.
-- Only `truth_core` is live-enabled in this step; other groups remain fixture-backed by design.
-## 2026-02-21 | Session 25: Phase-1 Benchmark Hardening + Career Tracking Metadata
-
-### What Happened
-- Implemented the pre-Phase-2 reliability upgrades to the benchmark runner and completed CLI/reporting hardening.
-- Upgraded benchmark execution from placeholder artifacts to real seeded tournament artifacts.
-- Added run/performer lineage metadata for future career summaries and top-performer extraction.
-
-### Implementations
-1. **Metric normalization for mixed scales**
-   - Added metric transform support to benchmark policy and scoring (`metric_transforms`).
-   - Implemented clipped-linear normalization for `net_roi` and `adaptation_gain_after_loss`.
-   - Group scores now use transformed metrics; threshold checks still use raw metrics.
-2. **Real seed artifact generation**
-   - Replaced synthetic artifact stubs with real per-seed tournament runs.
-   - Runner now emits real `results/transcript/ledger/selection_health` artifacts under `logs/benchmark_artifacts/seed_<seed>/`.
-3. **Ledger-based accounting invariants**
-   - Added per-seed supply drift audit from ledger transactions:
-     - minted, burned, expected delta vs observed delta, absolute drift.
-   - Drift now participates in validity gating.
-4. **Dual-channel pass semantics**
-   - Added separate booleans:
-     - `benchmark_score_pass`
-     - `gates_pass`
-     - `validity_pass`
-     - `final_pass`
-   - Final pass remains strict conjunction; score is still reported even when gates fail.
-5. **Lightweight trajectory checks**
-   - Added per-seed trajectory checks from real artifacts:
-     - early/late pass/aggression shifts
-     - entropy bits
-     - adaptation gain after loss
-     - pass/mutual-pass guardrails
-
-### CLI and Metadata Additions
-- Added benchmark CLI overrides:
-  - `--num-rounds-override`
-  - `--max-iterations-override`
-- Added lineage and identity metadata:
-  - `run_id`
-  - `performer_id`
-  - `parent_performer_id`
-  - `variant_label`
-  - `prompt_hashes`
-  - `runtime_fingerprint`
-  - `artifact_manifest` with SHA-256 hashes
-- Registry now stores performer lineage fields in model entries and history/windows.
-
-### Verification
-- New benchmark tests passed:
-  - `test_benchmark_config_parse.py`
-  - `test_benchmark_scoring.py`
-  - `test_benchmark_registry.py`
-  - `test_benchmark_runner_validity.py`
-  - `test_benchmark_gate_semantics.py`
-  - `test_phase1_benchmark_smoke.py`
-- Existing regression suite passed:
-  - `python tests/test_suite.py` -> `8 passed, 0 failed`
-
-### Observed Results
-- Example strict benchmark run (stub, seed=101):
-  - `aggregate_score=0.592068`
-  - `benchmark_score_pass=false`
-  - `gates_pass=false` (calibration gate)
-  - `validity_pass=true`
-  - `final_pass=false`
-  - `mean_accounting_drift_abs=0.0`
-- Economy-adaptation score became interpretable after normalization (raw ROI no longer dominates aggregate unfairly).
-
-### Insights
-- Infrastructure is now materially stronger for evidence-quality experiments:
-  - score/gate/validity are disentangled,
-  - accounting is auditable,
-  - trajectory signals are captured from real artifacts,
-  - run lineage is indexable for career analytics.
-- Remaining limitation before research claims: external benchmark datasets are still fixture-proxy in Phase 1.
+### Skill Command Guidance
+- **Do not force skill commands by default** for core roadmap implementation; normal code/test workflow is fastest.
+- Use **`playwright`** only when adding or validating real UI/dashboard flows.
+- Use **`skill-creator`** once repeated workflows stabilize (recommended custom skill: benchmark-governance runbook).
+- Use **`skill-installer`** only if a missing capability becomes a blocker.
 
 ---
-## 2026-02-21 | Session 24: Selection Health Dashboard + EV Guard Configurability
-
-### What Happened
-- Implemented a **Selection Health Dashboard** to quantify whether tournament dynamics are meaningful vs. noisy.
-- Made EV-guard behavior configurable via YAML (per debater), enabling controlled A/B experiments.
-- Integrated dashboard generation into the one-command vLLM research pipeline.
-
-### Key Additions
-- `src/analysis/selection_health.py`
-  - New metrics: `bankruptcy_rate`, `survival_runway_observed`, `pass_rate`, `aggression_rate`,
-    `mutual_pass_round_rate`, `avg_iterations`, `judge_score_entropy_bits`, `judge_margin_mean/stdev`,
-    `adaptation_gain_after_loss`, `economy_reasoning_rate`, and composite `health_score`.
-- `tests/selection_health_dashboard.py`
-  - CLI script to compute dashboard from transcript/results/ledger artifacts.
-- `scripts/run_vllm_research.ps1`
-  - Now runs dashboard automatically and writes `logs/selection_health_dashboard_<timestamp>.json`.
-
-### EV Guard Configurability
-- Added per-debater config knobs in `DebaterConfig` and YAML loader:
-  - `ev_guard_enabled`
-  - `ev_guard_min_ev`
-  - `ev_guard_edge_scale`
-  - `low_balance_threshold`
-  - `low_balance_bet_cap`
-- Wired through demos (`demo_dynamic.py`, `demo_tournament.py`) and recommended configs.
-
-### Verification / Observations
-- Regression suite remains green: `8 passed, 0 failed`.
-- Dynamic behavior improved from max-iteration saturation to earlier mutual PASS in smoke runs.
-- Dashboard run on latest 10-round artifact produced:
-  - `pass_rate=0.625`, `aggression_rate=0.375`, `mutual_pass_round_rate=1.0`,
-    `judge_score_entropy_bits=0.881`, `adaptation_gain_after_loss=0.044`, `health_score=0.487`.
-
-### Interpretation
-- This run is **directionally useful** but **not sufficient** for strong conclusions.
-- Need repeated runs (same config + multiple seeds/topics) to estimate variance and confidence intervals.
-
-### Decisions
-- **DEC-030**: Use dashboard metrics as default quality gate for tournament evidence quality.
-- **DEC-031**: Treat single-run dashboard outputs as directional diagnostics, not final proof.
-
----
-
 ## 2026-02-21 | Session 23: Research-Grade Runtime Guardrails, vLLM Integration, and Experiment Tooling
 
 ### What Happened
@@ -618,7 +137,34 @@
 *Chronological log of development progress*
 
 ---
+## 2026-02-20 | Session 23: vLLM Migration & Truth-Based Tournament Setup
 
+### What Happened
+- Successfully migrated the inference backend from Ollama to **vLLM** to unlock high-performance parallel generation.
+- Configured a **10-question truth-based tournament** to evaluate model grounding on AI ethics/alignment topics.
+
+### Implementations
+1. **vLLM Integration (`vllm_backend.py`)**
+   - Implemented `VLLMBackend` using vLLM's OpenAI-compatible `/v1/completions` API.
+   - Designed for significantly higher throughput via batching (vLLM's core strength).
+2. **Unified Backend Architecture (`debater.py`, `judge.py`)**
+   - Refactored `Debater` and `LLMJudge` to use a unified `_generate()` / `_generate_async()` helper system.
+   - Removed duplicate logging/parsing logic across backends.
+   - Added `vllm:` prefix routing in `load_model()`.
+3. **Truth Tournament Configuration**
+   - Updated `tournament_config.yaml` with 10 challenging factual/ethical topics.
+   - Shifted default models to vLLM-hosted Qwen2.5-1.5B-Instruct.
+
+### Insights & Thoughts
+- **Throughput as a Feature:** vLLM isn't just a speed fix; it's what makes 10-round tournaments with iterative betting viable. Ollama's sequential nature was a bottleneck for the "economy-at-scale" vision.
+- **Architectural Cleanup:** The backend refactor fixed a creeping technical debt where `ollama` logic was bleeding into the `Debater` class. The new unified interface makes the models backend-agnostic.
+- **Truth Grounding:** Moving from "opinion topics" (Session 22) to "truth topics" is the ultimate test of the economy. If agents can "bet on truth," the economy becomes a verification layer.
+
+### Key Decisions
+- **DEC-042**: **OpenAI-Compatibility over Custom API** — Opted for the OpenAI REST standard for vLLM to ensure future-proofing against other provider APIs (Anthropic, DeepSeek).
+- **DEC-043**: **Consolidated Generation** — Decided to enforce a single `_generate` entry point in models to ensure thinking extraction and cost tracking are applied consistently regardless of the backend.
+
+---
 
 ### What Happened
 - Successfully designed and implemented **DEC-038: The Wallet Phase** to fix the "Blind Betting" and "Argument Amnesia" architectural flaws that prevented economy grounding.
@@ -642,7 +188,7 @@
 - **Emergence of Economic Thinking:** In the baseline test (Session 20), models mentioned economy words in `<thinking>` only 1 time. After implementing the Wallet Phase, the 1.5b models outputted **8 mentions** (4 per debater) of the economy. They are actively reading their balances.
 
 ### Key Decisions
-- **DEC-041**: **Hard limit over organic length**  Decided to strictly enforce `max_tokens` rather than relying on the model to "naturally" stop generating. Autoregressive models lack the internal capacity to count words mid-generation; they must set a limit upfront.
+- **DEC-041**: **Hard limit over organic length** — Decided to strictly enforce `max_tokens` rather than relying on the model to "naturally" stop generating. Autoregressive models lack the internal capacity to count words mid-generation; they must set a limit upfront.
 ## 2026-02-20 | Session 21: Pre-Tournament Safeguards & Structural Testing
 
 ### What Happened
@@ -662,8 +208,8 @@
    - Modified `Tournament` execution loop to print human-readable narrative snapshots from observers between rounds.
 
 ### Key Decisions
-- **DEC-039**: **Metrics decoupled from core loop**  Health checks and analytical narratives exist entirely in the Observer layer (`observers.py`), ensuring the core `DynamicDebateRound` remains clean and free of side-effects.
-- **DEC-040**: **Strategic Deferrals**  The "AI-run Bank" (credit/debt manager) and "vLLM migration" (for speed) are officially deferred. Reason: The AI Bank adds complexity before base economic grounding is solved, and vLLM threatens the current rapid-iteration prompt engineering occurring on Ollama.
+- **DEC-039**: **Metrics decoupled from core loop** — Health checks and analytical narratives exist entirely in the Observer layer (`observers.py`), ensuring the core `DynamicDebateRound` remains clean and free of side-effects.
+- **DEC-040**: **Strategic Deferrals** — The "AI-run Bank" (credit/debt manager) and "vLLM migration" (for speed) are officially deferred. Reason: The AI Bank adds complexity before base economic grounding is solved, and vLLM threatens the current rapid-iteration prompt engineering occurring on Ollama.
 
 ---
 
@@ -680,27 +226,27 @@
 2. **Argument Amnesia**: The `decide_bet` thinking phase is completely forgotten when `generate_argument` starts.
 
 ### Future Priority Plans
-- **DEC-038**: **The Wallet Phase**  Replace the current dual-action deliberation prompt with a pure economic authorization phase ("You have X tokens. Authorize Y spend?"). The authorized budget (`max_budget_tokens`) must then be passed directly into the generation phase as a hard limit.
+- **DEC-038**: **The Wallet Phase** — Replace the current dual-action deliberation prompt with a pure economic authorization phase ("You have X tokens. Authorize Y spend?"). The authorized budget (`max_budget_tokens`) must then be passed directly into the generation phase as a hard limit.
 
 ---
 
 ## 2026-01-28 | Session 19: Critical Bug Fixes + Multi-Dimension Judge
 
 ### Problem: "Win by Doing Nothing"
-Tournament 2 revealed Beta won without making a single valid decisionall deliberations failed JSON validation (defaulted to PASS), conserving tokens while Alpha went bankrupt fighting.
+Tournament 2 revealed Beta won without making a single valid decision—all deliberations failed JSON validation (defaulted to PASS), conserving tokens while Alpha went bankrupt fighting.
 
 ### Root Cause Analysis
 | Bug | Impact |
 |-----|--------|
-| Validation failure ? free PASS | No penalty for broken JSON |
+| Validation failure → free PASS | No penalty for broken JSON |
 | Judge 100%/0% scores | Extreme volatility |
 | Single-dimension scoring | Passivity not penalized |
 
 ### Solution: Multi-Dimension Scoring
 Replaced single confidence score with 3 dimensions (research-backed):
-- **Accuracy** (40%)  Factual correctness
-- **Responsiveness** (30%)  Addressed opponent's points
-- **Development** (30%)  Refined argument over time
+- **Accuracy** (40%) — Factual correctness
+- **Responsiveness** (30%) — Addressed opponent's points
+- **Development** (30%) — Refined argument over time
 
 Passive debaters naturally score low on responsiveness + development.
 
@@ -721,8 +267,8 @@ Passive debaters naturally score low on responsiveness + development.
 
 ### Test Results
 ```
-Active vs Passive:   65% vs 35% ← Active wins
-Engaged vs Accurate: 61% vs 39% ← Engagement beats static accuracy
+Active vs Passive:   65% vs 35% â† Active wins
+Engaged vs Accurate: 61% vs 39% â† Engagement beats static accuracy
 All 6 verification tests: PASS
 ```
 
@@ -735,7 +281,7 @@ All 6 verification tests: PASS
 - Replaced 500-char truncation with LLM-generated position summaries
 - Debaters now self-summarize after each content generation
 - **Added `<thinking>` support to `generate_argument()` and `generate_research()`**
-- Thinking is optional ("You may use...")  model decides if worth the tokens
+- Thinking is optional ("You may use...") — model decides if worth the tokens
 - Summarization costs tokens (economic constraint on memory use)
 
 ### Key Decisions
@@ -759,7 +305,7 @@ All 6 verification tests: PASS
 ### Changes
 - **Prompts simplified**: Removed "debater", "participant", "opponent" labels
 - **New framing**: "Other AI's statement" instead of "Opponent's argument"
-- **max_tokens**: Increased 400?600 to prevent truncation
+- **max_tokens**: Increased 400→600 to prevent truncation
 - **Paragraph limits**: Removed (let token cost be natural constraint)
 - **Betting info**: Added explicit fee info to prompts
 
@@ -883,7 +429,7 @@ models:
 - Updated transcript logging to show fee burned in bet resolutions (full transparency).
 
 ### Bug Details
-With scaling fees (5% ? 50% cap), the old implementation:
+With scaling fees (5% → 50% cap), the old implementation:
 ```python
 return sum(b.amount * self.fee_rate for b in self._bets)  # Always 5%
 ```
@@ -928,7 +474,7 @@ Would report 15.0 for three 100-token bets, when actual fees were 5 + 25 + 50 = 
 - Costs tracked in `gen_cost_a/b` for observer metrics.
 
 ### Economic Impact
-- Typical deliberation: ~50-100 LLM tokens ? 2-5 economic tokens per call
+- Typical deliberation: ~50-100 LLM tokens → 2-5 economic tokens per call
 - Over 7 iterations: ~30-50 extra tokens spent on "thinking"
 - Creates pressure to PASS sooner or be more efficient with strategy
 
@@ -991,57 +537,3 @@ Would report 15.0 for three 100-token bets, when actual fees were 5 + 25 + 50 = 
 
 
 
-
-
-
-
-
-
-
-
-
-
-## 2026-02-22 | Session 34: Batch Bankruptcy Replacement Mode (Controlled, Optional)
-
-### What Happened
-- Added optional replacement mode for bankrupt batch runs.
-- Kept existing retry-once bankruptcy behavior as default when replacement mode is off.
-- Preserved benchmark final pass semantics and registry update path (no changes to `run_phase1` or registry logic).
-
-### Files Changed
-- `scripts/run_phase1_batch.py`
-- `src/benchmark/batch_utils.py`
-- `tests/test_benchmark_batch_utils.py`
-- `DEVLOG.md`
-
-### Implementation Details
-1. **New batch CLI flags**
-   - `--replacement-mode off|on` (default: `off`)
-   - `--replacement-roster <csv model ids>`
-   - `--replacement-judge-model <optional>`
-   - `--max-replacements-per-run <int>` (default: `1`)
-2. **Replacement trigger behavior**
-   - Trigger only after a run ends in terminal bankruptcy (`terminal_bankrupt=true` after retry policy).
-   - If replacement mode is on and replacement budget remains, reruns same `seed+label` with replacement model(s).
-3. **Provenance fields added to batch records/manifest**
-   - `original_model_id`
-   - `effective_model_id`
-   - `was_replaced`
-   - `replacement_index`
-   - `replaced_from_run_id`
-4. **Aggregate reporting additions**
-   - `replacement_run_count`
-   - `replacement_success_rate`
-5. **Regression guard for replacement-off behavior**
-   - Added assertions that replacement metrics remain zero when no replacement runs are present.
-
-### Validation
-- Passed:
-  - `python tests/test_benchmark_batch_utils.py`
-  - `python -m py_compile scripts/run_phase1_batch.py src/benchmark/batch_utils.py tests/test_benchmark_batch_utils.py`
-- Failed:
-  - None in this sessions targeted validation.
-
-### Known Limits
-- Replacement mode currently advances through `replacement_roster` in listed order; no automatic performance-based selection.
-- Replacement mode relies on bankruptcy detection from benchmark summary artifact references (same mechanism as existing retry policy).

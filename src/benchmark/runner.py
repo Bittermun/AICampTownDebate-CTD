@@ -4,8 +4,8 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from statistics import mean
-from typing import Dict, List, Literal, Optional, Tuple
+from statistics import mean, pstdev
+from typing import Any, Dict, List, Literal, Optional, Tuple
 import hashlib
 import json
 import platform
@@ -53,6 +53,8 @@ def _backend_label(model_name: str) -> str:
         return "ollama"
     if n.startswith("vllm:"):
         return "vllm"
+    if n.startswith("openai:"):
+        return "openai_compat"
     if n.startswith("stub"):
         return "stub"
     return "llama_cpp"
@@ -164,7 +166,43 @@ def _evaluate_group(
     allow_live_source_fallback: bool,
     live_source_failures: List[Dict],
     source_mode: SourceMode = "default",
+    model_metric_values: Optional[Dict[str, float]] = None,
 ):
+    all_items, degraded_mode, degraded_reasons = _load_group_items(
+        fixture_adapter=fixture_adapter,
+        hf_adapter=hf_adapter,
+        group_name=group_name,
+        group_policy=group_policy,
+        seed=seed,
+        strict_runtime=strict_runtime,
+        allow_live_source_fallback=allow_live_source_fallback,
+        live_source_failures=live_source_failures,
+        source_mode=source_mode,
+    )
+    result = score_group(
+        group_name,
+        all_items,
+        group_policy,
+        degraded_mode,
+        model_metric_values=model_metric_values,
+    )
+    if degraded_reasons:
+        result.reasons.extend(degraded_reasons)
+    return result
+
+
+def _load_group_items(
+    fixture_adapter: OfflineFixtureAdapter,
+    hf_adapter: HFDatasetAdapter,
+    group_name: str,
+    group_policy: GroupPolicy,
+    seed: int,
+    strict_runtime: bool,
+    allow_live_source_fallback: bool,
+    live_source_failures: List[Dict],
+    source_mode: SourceMode = "default",
+) -> Tuple[List, bool, List[str]]:
+    """Load and slice group items once so multiple scoring lanes reuse the same sample."""
     all_items = []
     degraded_mode = False
     degraded_reasons: List[str] = []
@@ -207,10 +245,89 @@ def _evaluate_group(
         picked = _deterministic_slice(items, limit=limit, seed=seed)
         all_items.extend(picked)
         degraded_mode = degraded_mode or degraded
-    result = score_group(group_name, all_items, group_policy, degraded_mode)
-    if degraded_reasons:
-        result.reasons.extend(degraded_reasons)
-    return result
+    return all_items, degraded_mode, degraded_reasons
+
+
+def _build_group_metric_overrides_from_health(health: Dict[str, float]) -> Dict[str, Dict[str, float]]:
+    """Map tournament health metrics to model-derived benchmark metric overrides."""
+    overrides: Dict[str, Dict[str, float]] = {}
+    economy_metrics: Dict[str, float] = {}
+
+    if "health_score" in health:
+        economy_metrics["selection_health_score"] = float(health["health_score"])
+    if "adaptation_gain_after_loss" in health:
+        economy_metrics["adaptation_gain_after_loss"] = float(health["adaptation_gain_after_loss"])
+
+    if economy_metrics:
+        overrides["economy_adaptation"] = economy_metrics
+    return overrides
+
+
+def _extract_multidim_metric_overrides_from_transcript(transcript_path: str) -> Dict[str, Dict[str, float]]:
+    """
+    Build model-derived metric proxies from final per-round judge multidim reports.
+
+    Expected judgment content format includes:
+      "Acc: A=55%/B=45%, Resp: A=55%/B=45%, Dev: A=55%/B=45%"
+    """
+    transcript = json.loads(Path(transcript_path).read_text(encoding="utf-8"))
+    rounds = transcript.get("rounds", [])
+    if not rounds:
+        return {}
+
+    acc_maxes: List[float] = []
+    resp_maxes: List[float] = []
+    dev_maxes: List[float] = []
+    pattern = re.compile(
+        r"Acc:\s*A=(\d+)%/B=(\d+)%,\s*Resp:\s*A=(\d+)%/B=(\d+)%,\s*Dev:\s*A=(\d+)%/B=(\d+)%"
+    )
+
+    for r in rounds:
+        turns = r.get("turns", [])
+        judgments = [t for t in turns if t.get("type") == "judgment"]
+        if not judgments:
+            continue
+        final_judgment = judgments[-1]
+        content = str(final_judgment.get("content", ""))
+        m = pattern.search(content)
+        if not m:
+            continue
+        acc_a, acc_b, resp_a, resp_b, dev_a, dev_b = [int(x) / 100.0 for x in m.groups()]
+        acc_maxes.append(max(acc_a, acc_b))
+        resp_maxes.append(max(resp_a, resp_b))
+        dev_maxes.append(max(dev_a, dev_b))
+
+    if not acc_maxes:
+        return {}
+
+    acc_proxy = float(mean(acc_maxes))
+    resp_proxy = float(mean(resp_maxes)) if resp_maxes else acc_proxy
+    dev_proxy = float(mean(dev_maxes)) if dev_maxes else acc_proxy
+    evidence_proxy = (resp_proxy + dev_proxy) / 2.0
+
+    return {
+        "truth_core_core": {"accuracy": acc_proxy},
+        "truth_core_stretch": {"accuracy": acc_proxy},
+        "reasoning_core": {
+            "task_accuracy": acc_proxy,
+            "evidence_grounding": evidence_proxy,
+        },
+    }
+
+
+def _build_group_metric_overrides_from_artifacts(
+    health: Dict[str, float],
+    transcript_path: str,
+) -> Dict[str, Dict[str, float]]:
+    """Merge model-derived overrides from health and transcript artifacts."""
+    overrides = _build_group_metric_overrides_from_health(health)
+    multidim = _extract_multidim_metric_overrides_from_transcript(transcript_path)
+
+    for group_name, metrics in multidim.items():
+        if group_name not in overrides:
+            overrides[group_name] = {}
+        overrides[group_name].update(metrics)
+    return overrides
 
 
 def _build_seed_tournament(
@@ -357,7 +474,7 @@ def _extract_round_decisions(transcript: Dict) -> List[Tuple[int, int]]:
             if not match:
                 continue
             d = match.group(1).upper()
-            if d == "PASS":
+            if d in {"PASS", "HOLD"}:
                 pass_count += 1
             elif d == "RESPOND":
                 respond_count += 1
@@ -422,6 +539,121 @@ def _compute_trajectory_checks(transcript_path: str, health: Dict[str, float], p
     return checks, len(issues) == 0, issues
 
 
+def _summarize_score_provenance(seed_results: List[SeedResult]) -> Dict[str, Any]:
+    """Summarize metric/score provenance across seeds for reporting."""
+    if not seed_results:
+        return {
+            "aggregate_score_source": "unknown",
+            "group_score_sources": {},
+            "group_metric_sources": {},
+        }
+
+    group_names = sorted({g for s in seed_results for g in s.group_results.keys()})
+    group_score_sources: Dict[str, str] = {}
+    group_metric_sources: Dict[str, Dict[str, str]] = {}
+
+    for group_name in group_names:
+        seed_group_results = [s.group_results[group_name] for s in seed_results if group_name in s.group_results]
+        score_sources = {r.score_source for r in seed_group_results}
+        if len(score_sources) == 1:
+            group_score_sources[group_name] = next(iter(score_sources))
+        else:
+            group_score_sources[group_name] = "hybrid"
+
+        metric_names = sorted({m for r in seed_group_results for m in r.metric_sources.keys()})
+        per_metric: Dict[str, str] = {}
+        for metric in metric_names:
+            metric_srcs = {r.metric_sources.get(metric, "unknown") for r in seed_group_results}
+            if len(metric_srcs) == 1:
+                per_metric[metric] = next(iter(metric_srcs))
+            else:
+                per_metric[metric] = "hybrid"
+        group_metric_sources[group_name] = per_metric
+
+    uniq = set(group_score_sources.values())
+    if len(uniq) == 1:
+        aggregate_source = next(iter(uniq))
+    elif uniq:
+        aggregate_source = "hybrid"
+    else:
+        aggregate_source = "unknown"
+
+    return {
+        "aggregate_score_source": aggregate_source,
+        "group_score_sources": group_score_sources,
+        "group_metric_sources": group_metric_sources,
+    }
+
+
+def _bootstrap_mean_ci(values: List[float], samples: int = 2000, alpha: float = 0.05, seed: int = 7) -> Tuple[float, float]:
+    """Bootstrap CI for the mean, deterministic via local RNG seed."""
+    if not values:
+        return 0.0, 0.0
+    if len(values) == 1:
+        v = float(values[0])
+        return v, v
+    rng = random.Random(seed)
+    n = len(values)
+    draws: List[float] = []
+    for _ in range(samples):
+        sample = [values[rng.randrange(n)] for _ in range(n)]
+        draws.append(float(mean(sample)))
+    draws.sort()
+    lo_idx = max(0, int((alpha / 2.0) * samples))
+    hi_idx = min(samples - 1, int((1.0 - alpha / 2.0) * samples) - 1)
+    return float(draws[lo_idx]), float(draws[hi_idx])
+
+
+def _summarize_counterfactual_scoring(
+    fixture_aggregates: List[float],
+    model_derived_aggregates: List[float],
+    primary_lane: str,
+) -> Dict[str, Any]:
+    """Summarize dual-lane scoring and uplift (model_derived - fixture_static)."""
+    if not fixture_aggregates or not model_derived_aggregates:
+        return {
+            "primary_lane": primary_lane,
+            "fixture_static": {"mean": 0.0, "stdev": 0.0},
+            "model_derived": {"mean": 0.0, "stdev": 0.0},
+            "uplift_model_minus_fixture": {
+                "mean": 0.0,
+                "stdev": 0.0,
+                "ci95_low": 0.0,
+                "ci95_high": 0.0,
+                "n_seeds": 0,
+                "positive_ci95": False,
+            },
+        }
+
+    n = min(len(fixture_aggregates), len(model_derived_aggregates))
+    fixture_vals = [float(x) for x in fixture_aggregates[:n]]
+    model_vals = [float(x) for x in model_derived_aggregates[:n]]
+    uplift_vals = [m - f for f, m in zip(fixture_vals, model_vals)]
+    ci_low, ci_high = _bootstrap_mean_ci(uplift_vals, samples=2000, alpha=0.05, seed=7)
+    uplift_mean = float(mean(uplift_vals))
+    uplift_stdev = float(pstdev(uplift_vals)) if len(uplift_vals) > 1 else 0.0
+
+    return {
+        "primary_lane": primary_lane,
+        "fixture_static": {
+            "mean": round(float(mean(fixture_vals)), 6),
+            "stdev": round(float(pstdev(fixture_vals)) if len(fixture_vals) > 1 else 0.0, 6),
+        },
+        "model_derived": {
+            "mean": round(float(mean(model_vals)), 6),
+            "stdev": round(float(pstdev(model_vals)) if len(model_vals) > 1 else 0.0, 6),
+        },
+        "uplift_model_minus_fixture": {
+            "mean": round(uplift_mean, 6),
+            "stdev": round(uplift_stdev, 6),
+            "ci95_low": round(ci_low, 6),
+            "ci95_high": round(ci_high, 6),
+            "n_seeds": n,
+            "positive_ci95": bool(ci_low > 0.0),
+        },
+    }
+
+
 def run_phase1(
     policy: BenchmarkPolicy,
     tournament_config_path: str,
@@ -440,6 +672,7 @@ def run_phase1(
     artifact_root: Optional[str] = None,
     source_mode: SourceMode = "default",
     run_label: Optional[str] = None,
+    enable_model_derived_metrics: bool = False,
 ) -> BenchmarkRunResult:
     """Run full phase-1 benchmark with live/fixture datasets + real seed artifacts."""
     tc = load_config(tournament_config_path)
@@ -501,6 +734,25 @@ def run_phase1(
             degraded_mode_reason="dry_run",
             elo_before_after={"before": 0.0, "after": 0.0},
             tier_before_after={"before": "Unranked", "after": "Unranked"},
+            score_provenance={
+                "aggregate_score_source": "unknown",
+                "group_score_sources": {},
+                "group_metric_sources": {},
+                "counterfactual": {
+                    "primary_lane": "unknown",
+                    "fixture_static": {"mean": 0.0, "stdev": 0.0},
+                    "model_derived": {"mean": 0.0, "stdev": 0.0},
+                    "uplift_model_minus_fixture": {
+                        "mean": 0.0,
+                        "stdev": 0.0,
+                        "ci95_low": 0.0,
+                        "ci95_high": 0.0,
+                        "n_seeds": 0,
+                        "positive_ci95": False,
+                    },
+                },
+                "model_derived_metrics_enabled": enable_model_derived_metrics,
+            },
             run_metadata={
                 "run_id": run_id,
                 "run_label": run_label,
@@ -526,6 +778,7 @@ def run_phase1(
                     "allow_stub": allow_stub,
                     "source_mode": source_mode,
                     "artifact_root": artifact_root_path,
+                    "enable_model_derived_metrics": enable_model_derived_metrics,
                 },
             },
         )
@@ -543,6 +796,8 @@ def run_phase1(
     )
     seed_results: List[SeedResult] = []
     aggregate_scores = []
+    aggregate_scores_fixture_static: List[float] = []
+    aggregate_scores_model_derived: List[float] = []
     seed_score_pass_flags = []
     gates_all_pass = True
     any_degraded_mode = False
@@ -556,9 +811,25 @@ def run_phase1(
         gates_pass = all(g.passed for g in gates)
         gates_all_pass = gates_all_pass and gates_pass
 
-        group_results = {}
+        artifact_paths, health = _run_seed_tournament(
+            tc=tc,
+            model_name=model_name,
+            judge_model_name=judge_model_configured,
+            seed=seed,
+            strict_runtime=strict_runtime,
+            artifact_root=artifact_root_path,
+        )
+        group_metric_overrides: Dict[str, Dict[str, float]] = {}
+        group_metric_overrides = _build_group_metric_overrides_from_artifacts(
+            health=health,
+            transcript_path=artifact_paths["transcript_json"],
+        )
+
+        group_results: Dict[str, Any] = {}
+        group_results_fixture_static: Dict[str, Any] = {}
+        group_results_model_derived: Dict[str, Any] = {}
         for group_name, group_policy in policy.benchmark_groups.items():
-            res = _evaluate_group(
+            all_items, degraded_mode, degraded_reasons = _load_group_items(
                 fixture_adapter=adapter,
                 hf_adapter=hf_adapter,
                 group_name=group_name,
@@ -569,26 +840,41 @@ def run_phase1(
                 live_source_failures=live_source_failures,
                 source_mode=source_mode,
             )
-            group_results[group_name] = res
-            any_degraded_mode = any_degraded_mode or res.degraded_mode
+            static_result = score_group(
+                group_name,
+                all_items,
+                group_policy,
+                degraded_mode,
+                model_metric_values=None,
+            )
+            derived_result = score_group(
+                group_name,
+                all_items,
+                group_policy,
+                degraded_mode,
+                model_metric_values=group_metric_overrides.get(group_name),
+            )
+            if degraded_reasons:
+                static_result.reasons.extend(degraded_reasons)
+                derived_result.reasons.extend(degraded_reasons)
+
+            group_results_fixture_static[group_name] = static_result
+            group_results_model_derived[group_name] = derived_result
+            group_results[group_name] = derived_result if enable_model_derived_metrics else static_result
+            any_degraded_mode = any_degraded_mode or degraded_mode
 
         group_weights = {name: gp.weight for name, gp in policy.benchmark_groups.items()}
+        aggregate_fixture_static = weighted_group_scores(group_results_fixture_static, group_weights)
+        aggregate_model_derived = weighted_group_scores(group_results_model_derived, group_weights)
         aggregate = weighted_group_scores(group_results, group_weights)
+        aggregate_scores_fixture_static.append(aggregate_fixture_static)
+        aggregate_scores_model_derived.append(aggregate_model_derived)
         blocking_group_names = [name for name, gp in policy.benchmark_groups.items() if gp.blocking]
         if not blocking_group_names:
             blocking_group_names = list(group_results.keys())
         score_pass = aggregate >= policy.aggregate_scoring.min_pass_score and all(group_results[name].pass_group for name in blocking_group_names)
         aggregate_scores.append(aggregate)
         seed_score_pass_flags.append(score_pass)
-
-        artifact_paths, health = _run_seed_tournament(
-            tc=tc,
-            model_name=model_name,
-            judge_model_name=judge_model_configured,
-            seed=seed,
-            strict_runtime=strict_runtime,
-            artifact_root=artifact_root_path,
-        )
 
         seed_validity_issues: List[str] = []
         for key in policy.invariants.run_validity.required_artifacts:
@@ -622,6 +908,11 @@ def run_phase1(
                 group_results=group_results,
                 aggregate_score=round(aggregate, 6),
                 pass_benchmark=(score_pass and gates_pass and trajectory_pass and valid_run),
+                counterfactual_aggregates={
+                    "fixture_static": round(aggregate_fixture_static, 6),
+                    "model_derived": round(aggregate_model_derived, 6),
+                    "uplift_model_minus_fixture": round(aggregate_model_derived - aggregate_fixture_static, 6),
+                },
                 benchmark_score_pass=score_pass,
                 gates_pass=gates_pass,
                 trajectory_pass=trajectory_pass,
@@ -668,6 +959,13 @@ def run_phase1(
         else 0.0,
     }
 
+    counterfactual_summary = _summarize_counterfactual_scoring(
+        fixture_aggregates=aggregate_scores_fixture_static,
+        model_derived_aggregates=aggregate_scores_model_derived,
+        primary_lane="model_derived" if enable_model_derived_metrics else "fixture_static",
+    )
+    uplift_meta = counterfactual_summary.get("uplift_model_minus_fixture", {})
+
     gate_summary = {
         "aggregate_benchmark_pass": agg.benchmark_pass,
         "stability_pass": agg.stability_pass,
@@ -679,6 +977,11 @@ def run_phase1(
         "final_pass": final_pass,
         "mean_accounting_drift_abs": round(mean(accounting_drifts), 6) if accounting_drifts else 0.0,
         "max_accounting_drift_abs": round(max(accounting_drifts), 6) if accounting_drifts else 0.0,
+        "counterfactual_primary_lane": counterfactual_summary.get("primary_lane", "unknown"),
+        "counterfactual_uplift_mean": float(uplift_meta.get("mean", 0.0)),
+        "counterfactual_uplift_ci95_low": float(uplift_meta.get("ci95_low", 0.0)),
+        "counterfactual_uplift_ci95_high": float(uplift_meta.get("ci95_high", 0.0)),
+        "counterfactual_uplift_positive_ci95": bool(uplift_meta.get("positive_ci95", False)),
     }
 
     metadata_blob = {
@@ -696,6 +999,10 @@ def run_phase1(
             degraded_mode_reason = "fixture fallback used due to live source pull failures"
         else:
             degraded_mode_reason = "fixture-backed datasets in benchmark policy"
+
+    score_provenance = _summarize_score_provenance(seed_results)
+    score_provenance["counterfactual"] = counterfactual_summary
+    score_provenance["model_derived_metrics_enabled"] = enable_model_derived_metrics
 
     return BenchmarkRunResult(
         benchmark_id=policy.meta.benchmark_id,
@@ -719,6 +1026,7 @@ def run_phase1(
         degraded_mode_reason=degraded_mode_reason,
         elo_before_after={"before": 0.0, "after": 0.0},
         tier_before_after={"before": "Unranked", "after": "Unranked"},
+        score_provenance=score_provenance,
         artifact_paths={
             "results_json": policy.reporting.output_paths.benchmark_summary,
             "champion_registry": policy.reporting.output_paths.champion_registry,
@@ -750,7 +1058,9 @@ def run_phase1(
                 "allow_stub": allow_stub,
                 "source_mode": source_mode,
                 "artifact_root": artifact_root_path,
+                "enable_model_derived_metrics": enable_model_derived_metrics,
             },
+            "score_provenance": score_provenance,
             "artifact_manifest": {
                 **_build_artifact_manifest(
                     {

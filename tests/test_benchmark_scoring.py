@@ -48,6 +48,38 @@ def test_group_scoring_and_thresholds():
     assert result.pass_group is True
     assert result.metric_means_raw["net_roi"] < 0
     assert 0.0 <= result.metric_means_transformed["net_roi"] <= 1.0
+    assert result.metric_sources["net_roi"] == "fixture_static"
+    assert result.score_source == "fixture_static"
+
+
+def test_group_scoring_model_metric_override():
+    policy = GroupPolicy(
+        weight=1.0,
+        metric="selection_health_score",
+        min_group_score=0.0,
+    )
+    items = [
+        BenchmarkItem(
+            item_id="1",
+            group="economy_adaptation",
+            dataset="budget",
+            prompt="x",
+            metric_values={"selection_health_score": 0.10},
+        ),
+    ]
+
+    fixture_result = score_group("economy_adaptation", items, policy, degraded_mode=False)
+    model_result = score_group(
+        "economy_adaptation",
+        items,
+        policy,
+        degraded_mode=False,
+        model_metric_values={"selection_health_score": 0.85},
+    )
+    assert fixture_result.score == 0.1
+    assert model_result.score == 0.85
+    assert model_result.metric_sources["selection_health_score"] == "model_derived"
+    assert model_result.score_source == "model_derived"
 
 
 def test_weighted_and_aggregate_scoring():
@@ -71,5 +103,6 @@ def test_weighted_and_aggregate_scoring():
 
 if __name__ == "__main__":
     test_group_scoring_and_thresholds()
+    test_group_scoring_model_metric_override()
     test_weighted_and_aggregate_scoring()
     print("test_benchmark_scoring: PASS")

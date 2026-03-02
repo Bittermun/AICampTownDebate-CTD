@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from statistics import mean, pstdev
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from .config_models import AggregatePolicy, GroupPolicy, MetricTransformSpec
 from .types import AggregateScoreResult, BenchmarkItem, GroupScoreResult
@@ -21,7 +21,13 @@ def _apply_transform(value: float, spec: MetricTransformSpec) -> float:
     return value
 
 
-def score_group(group_name: str, items: List[BenchmarkItem], policy: GroupPolicy, degraded_mode: bool) -> GroupScoreResult:
+def score_group(
+    group_name: str,
+    items: List[BenchmarkItem],
+    policy: GroupPolicy,
+    degraded_mode: bool,
+    model_metric_values: Optional[Dict[str, float]] = None,
+) -> GroupScoreResult:
     metrics = []
     if policy.metric:
         metrics = [policy.metric]
@@ -30,14 +36,25 @@ def score_group(group_name: str, items: List[BenchmarkItem], policy: GroupPolicy
 
     metric_means_raw: Dict[str, float] = {}
     metric_means_transformed: Dict[str, float] = {}
+    metric_sources: Dict[str, str] = {}
     reasons: List[str] = []
+    used_model_metric = False
+    used_fixture_metric = False
     for metric in metrics:
         values = [it.metric_values.get(metric) for it in items if metric in it.metric_values]
-        raw_mean = float(mean(values)) if values else 0.0
+        raw_mean: float
+        if model_metric_values is not None and metric in model_metric_values:
+            raw_mean = float(model_metric_values[metric])
+            metric_sources[metric] = "model_derived"
+            used_model_metric = True
+        else:
+            raw_mean = float(mean(values)) if values else 0.0
+            metric_sources[metric] = "fixture_static"
+            used_fixture_metric = True
         metric_means_raw[metric] = raw_mean
         transform = policy.metric_transforms.get(metric, MetricTransformSpec(type="identity"))
         metric_means_transformed[metric] = _apply_transform(raw_mean, transform)
-        if not values:
+        if metric_sources[metric] == "fixture_static" and not values:
             reasons.append(f"Metric '{metric}' missing on all items.")
 
     if metric_means_transformed:
@@ -71,12 +88,20 @@ def score_group(group_name: str, items: List[BenchmarkItem], policy: GroupPolicy
                 pass_group = False
                 reasons.append(f"selection_health_score {health:.3f} < threshold {t.min_health_score:.3f}")
 
+    score_source = "fixture_static"
+    if used_model_metric and used_fixture_metric:
+        score_source = "hybrid"
+    elif used_model_metric:
+        score_source = "model_derived"
+
     return GroupScoreResult(
         group_name=group_name,
         score=round(score, 6),
         metric_means={k: round(v, 6) for k, v in metric_means_transformed.items()},
         metric_means_raw={k: round(v, 6) for k, v in metric_means_raw.items()},
         metric_means_transformed={k: round(v, 6) for k, v in metric_means_transformed.items()},
+        metric_sources=metric_sources,
+        score_source=score_source,
         pass_group=pass_group,
         reasons=reasons,
         item_count=len(items),

@@ -1,0 +1,43 @@
+version: "tournament_core_v1"
+rules:
+  - id: "R_OBJECTIVE"
+    text: "Maximize expected terminal tournament balance, not single-turn style points."
+    tags: ["economy", "objective"]
+    priority: 1
+  - id: "R_BANKRUPTCY"
+    text: "If balance is less than or equal to 0, the debater is eliminated."
+    tags: ["economy", "risk"]
+    priority: 1
+  - id: "R_HOLD_RESPOND"
+    text: "HOLD saves stake and fee now; RESPOND risks stake and fee for potential upside."
+    tags: ["economy", "action"]
+    priority: 2
+  - id: "R_FEE_GROWTH"
+    text: "Bet fee increases with iteration and reaches high values in late iterations."
+    tags: ["economy", "fee"]
+    priority: 2
+  - id: "R_COST_COMPONENTS"
+    text: "Generation, deliberation, and optional search all consume tokens."
+    tags: ["economy", "cost"]
+    priority: 2
+  - id: "R_EV_DISCIPLINE"
+    text: "When edge is weak and costs are high, conservative actions are often higher expected value."
+    tags: ["economy", "strategy"]
+    priority: 3
+prompt_views:
+  deliberation_compact:
+    - "R_OBJECTIVE"
+    - "R_BANKRUPTCY"
+    - "R_HOLD_RESPOND"
+    - "R_FEE_GROWTH"
+    - "R_COST_COMPONENTS"
+    - "R_EV_DISCIPLINE"
+  generation_compact:
+    - "R_OBJECTIVE"
+    - "R_BANKRUPTCY"
+    - "R_COST_COMPONENTS"
+  probe_compact:
+    - "R_BANKRUPTCY"
+    - "R_HOLD_RESPOND"
+    - "R_FEE_GROWTH"
+    - "R_COST_COMPONENTS"

@@ -1,7 +1,7 @@
 {
-  "tournament_id": "20260221_160544",
-  "started_at": "2026-02-21T16:05:44.201081",
-  "ended_at": "2026-02-21T16:05:44.201421",
+  "tournament_id": "20260301_185956",
+  "started_at": "2026-03-01T18:59:56.089742",
+  "ended_at": "2026-03-01T18:59:56.090115",
   "config": {
     "num_rounds": 1,
     "initial_balance": 350,
@@ -11,19 +11,19 @@
     "debater_b": "Debater_Beta",
     "judge": "Judge_Main"
   },
-  "winner": "Debater_Alpha",
+  "winner": null,
   "final_balances": {
-    "Debater_Alpha": 444.0,
-    "Debater_Beta": 425.5
+    "Debater_Alpha": 435.0,
+    "Debater_Beta": 435.0
   },
   "rounds": [
     {
       "round_id": 1,
       "topic": "Does increasing the number of parameters always improve an LLM's factual accuracy?",
-      "confidence_a": 0.55,
-      "confidence_b": 0.45000000000000007,
-      "tokens_awarded_a": 94.0,
-      "tokens_awarded_b": 86.00000000000001,
+      "confidence_a": 0.5,
+      "confidence_b": 0.5,
+      "tokens_awarded_a": 85.0,
+      "tokens_awarded_b": 85.0,
       "turns": [
         {
           "speaker": "Debater_Alpha",
@@ -46,16 +46,16 @@
         {
           "speaker": "Judge_Main (initial)",
           "type": "judgment",
-          "content": "[MULTI-DIM] Acc: A=55%/B=45%, Resp: A=55%/B=45%, Dev: A=55%/B=45% | Stub judgment response.",
+          "content": "[ENSEMBLE] Run1: A=0.460/B=0.540 Run2: A=0.540/B=0.460 | [MULTI-DIM] Acc: A=55%/B=45%, Resp: A=55%/B=45%, Dev: A=55%/B=45% | Stub judgment response.",
           "tokens_bet": 0.0,
-          "confidence_a": 0.45000000000000007,
-          "confidence_b": 0.55,
+          "confidence_a": 0.5,
+          "confidence_b": 0.5,
           "sub_judgments": []
         },
         {
           "speaker": "System",
           "type": "payout",
-          "content": "**Initial Bounty Distributed**: A=22.5, B=27.5 (from 50 pot)",
+          "content": "**Initial Bounty Distributed**: A=25.0, B=25.0 (from 50 pot)",
           "tokens_bet": 0.0,
           "confidence_a": null,
           "confidence_b": null,
@@ -64,7 +64,7 @@
         {
           "speaker": "Debater_Alpha",
           "type": "deliberation",
-          "content": "**Balance**: 372 tokens | **Standing**: 45% vs 55%\n**Own Argument (summary)**: [STUB] Response to: Topic: Does increasing the number of parameters al......\n**Opponent (summary)**: [STUB] Response to: Topic: Does increasing the number of parameters al......\n\n**Decision**: PASS (bet: 0.0 tokens) | **Max Budget**: 30.0 tokens\n**Reasoning**: [Iter 1] [STUB_EV_PASS] ev=-0.210, fee=0.05",
+          "content": "**Balance**: 375 tokens | **Standing**: 50% vs 50%\n**Own Argument (summary)**: [STUB] Response to: Topic: Does increasing the number of parameters al......\n**Opponent (summary)**: [STUB] Response to: Topic: Does increasing the number of parameters al......\n\n**Decision**: HOLD (bet: 0.0 tokens) | **Intent**: other | **Max Budget**: 30.0 tokens\n**Reasoning**: [Iter 1] [STUB_EV_PASS] ev=-0.050, fee=0.05",
           "tokens_bet": 0,
           "confidence_a": null,
           "confidence_b": null,
@@ -73,34 +73,7 @@
         {
           "speaker": "Debater_Beta",
           "type": "deliberation",
-          "content": "**Balance**: 378 tokens | **Standing**: 55% vs 45%\n**Own Argument (summary)**: [STUB] Response to: Topic: Does increasing the number of parameters al......\n**Opponent (summary)**: [STUB] Response to: Topic: Does increasing the number of parameters al......\n\n**Decision**: RESPOND (bet: 10.0 tokens) | **Max Budget**: 30.0 tokens\n**Reasoning**: [Iter 1] [STUB] Random respond choice",
-          "tokens_bet": 10,
-          "confidence_a": null,
-          "confidence_b": null,
-          "sub_judgments": []
-        },
-        {
-          "speaker": "Debater_Beta",
-          "type": "counter",
-          "content": "[STUB] Response to: Topic: Does increasing the number of parameters al...",
-          "tokens_bet": 10,
-          "confidence_a": null,
-          "confidence_b": null,
-          "sub_judgments": []
-        },
-        {
-          "speaker": "Judge_Main (iter 1)",
-          "type": "judgment",
-          "content": "[MULTI-DIM] Acc: A=55%/B=45%, Resp: A=55%/B=45%, Dev: A=55%/B=45% | Stub judgment response.",
-          "tokens_bet": 0.0,
-          "confidence_a": 0.55,
-          "confidence_b": 0.45000000000000007,
-          "sub_judgments": []
-        },
-        {
-          "speaker": "Debater_Beta",
-          "type": "payout",
-          "content": "**Bet Outcome**: LOST | **Fee Burned**: 0.5\n**Payout**: +58.5 tokens",
+          "content": "**Balance**: 375 tokens | **Standing**: 50% vs 50%\n**Own Argument (summary)**: [STUB] Response to: Topic: Does increasing the number of parameters al......\n**Opponent (summary)**: [STUB] Response to: Topic: Does increasing the number of parameters al......\n\n**Decision**: HOLD (bet: 0.0 tokens) | **Intent**: other | **Max Budget**: 30.0 tokens\n**Reasoning**: [Iter 1] [STUB_EV_PASS] ev=-0.050, fee=0.05",
           "tokens_bet": 0,
           "confidence_a": null,
           "confidence_b": null,

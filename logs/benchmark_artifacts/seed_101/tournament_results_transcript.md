@@ -1,6 +1,6 @@
-# Debate Transcript: 20260221_160544
-*Started: 2026-02-21T16:05:44.201081*
-*Ended: 2026-02-21T16:05:44.201421*
+# Debate Transcript: 20260301_185956
+*Started: 2026-03-01T18:59:56.089742*
+*Ended: 2026-03-01T18:59:56.090115*
 
 ## Configuration
 ```json
@@ -26,52 +26,38 @@
 [STUB] Response to: Topic: Does increasing the number of parameters al...
 
 ### 🧑‍⚖️ Judge_Main (initial) (Judgment)
-**Confidence A**: 0.45 | **Confidence B**: 0.55
+**Confidence A**: 0.50 | **Confidence B**: 0.50
 
-[MULTI-DIM] Acc: A=55%/B=45%, Resp: A=55%/B=45%, Dev: A=55%/B=45% | Stub judgment response.
+[ENSEMBLE] Run1: A=0.460/B=0.540 Run2: A=0.540/B=0.460 | [MULTI-DIM] Acc: A=55%/B=45%, Resp: A=55%/B=45%, Dev: A=55%/B=45% | Stub judgment response.
 
 ### 💰 System (Bet Resolution)
 
-**Initial Bounty Distributed**: A=22.5, B=27.5 (from 50 pot)
+**Initial Bounty Distributed**: A=25.0, B=25.0 (from 50 pot)
 
 ### 🎯 Debater_Alpha (Strategic Deliberation)
 
-**Balance**: 372 tokens | **Standing**: 45% vs 55%
+**Balance**: 375 tokens | **Standing**: 50% vs 50%
 **Own Argument (summary)**: [STUB] Response to: Topic: Does increasing the number of parameters al......
 **Opponent (summary)**: [STUB] Response to: Topic: Does increasing the number of parameters al......
 
-**Decision**: PASS (bet: 0.0 tokens) | **Max Budget**: 30.0 tokens
-**Reasoning**: [Iter 1] [STUB_EV_PASS] ev=-0.210, fee=0.05
+**Decision**: HOLD (bet: 0.0 tokens) | **Intent**: other | **Max Budget**: 30.0 tokens
+**Reasoning**: [Iter 1] [STUB_EV_PASS] ev=-0.050, fee=0.05
 
 ### 🎯 Debater_Beta (Strategic Deliberation)
 
-**Balance**: 378 tokens | **Standing**: 55% vs 45%
+**Balance**: 375 tokens | **Standing**: 50% vs 50%
 **Own Argument (summary)**: [STUB] Response to: Topic: Does increasing the number of parameters al......
 **Opponent (summary)**: [STUB] Response to: Topic: Does increasing the number of parameters al......
 
-**Decision**: RESPOND (bet: 10.0 tokens) | **Max Budget**: 30.0 tokens
-**Reasoning**: [Iter 1] [STUB] Random respond choice
+**Decision**: HOLD (bet: 0.0 tokens) | **Intent**: other | **Max Budget**: 30.0 tokens
+**Reasoning**: [Iter 1] [STUB_EV_PASS] ev=-0.050, fee=0.05
 
-### 🔄 Debater_Beta (bet: 10.0 tokens)
-
-[STUB] Response to: Topic: Does increasing the number of parameters al...
-
-### 🧑‍⚖️ Judge_Main (iter 1) (Judgment)
-**Confidence A**: 0.55 | **Confidence B**: 0.45
-
-[MULTI-DIM] Acc: A=55%/B=45%, Resp: A=55%/B=45%, Dev: A=55%/B=45% | Stub judgment response.
-
-### 💰 Debater_Beta (Bet Resolution)
-
-**Bet Outcome**: LOST | **Fee Burned**: 0.5
-**Payout**: +58.5 tokens
-
-**Tokens awarded**: A=94.0, B=86.0
+**Tokens awarded**: A=85.0, B=85.0
 
 ---
 
 ## Final Results
-**Winner**: Debater_Alpha
+**Winner**: TIE
 
-- Debater_Alpha: 444.0 tokens
-- Debater_Beta: 425.5 tokens
+- Debater_Alpha: 435.0 tokens
+- Debater_Beta: 435.0 tokens

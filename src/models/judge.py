@@ -8,7 +8,7 @@ import json
 import re
 from abc import ABC, abstractmethod
 from pydantic import ValidationError
-from .response_models import JudgmentResponse, MultiDimensionJudgment
+from .response_models import JudgmentResponse, MultiDimensionJudgment, AllocationJudgment
 from .judge_prompts import MULTI_DIMENSION_SYSTEM, MULTI_DIMENSION_PROMPT, COMPARATIVE_CONTEXT_BLOCK
 
 
@@ -61,6 +61,7 @@ class JudgeConfig:
     gpu_layers: int = 15
     context_size: int = 2048
     randomize_argument_order: bool = False  # Mitigate positional bias
+    ensemble_judge: bool = True  # Run two swapped evals and average (eliminates positional bias)
     strict_runtime: bool = True
 
 
@@ -82,12 +83,16 @@ class LLMJudge(BaseJudge):
         elif config.model_path.startswith("vllm:"):
             self._backend = "vllm"
             self._vllm_model = config.model_path.split(":", 1)[1]
+        elif config.model_path.startswith("openai:"):
+            self._backend = "openai_compat"
+            self._openai_model = config.model_path.split(":", 1)[1]
         else:
             self._backend = "llama_cpp"
         
         self._model = None
         self._ollama = None
         self._vllm = None
+        self._openai = None
     
     @property
     def name(self) -> str:
@@ -123,6 +128,19 @@ class LLMJudge(BaseJudge):
                 print(f"{msg}, falling back to stub")
                 self._backend = "stub"
             return
+
+        if self._backend == "openai_compat":
+            from .openai_compat_backend import OpenAICompatBackend, OpenAICompatConfig
+            self._openai = OpenAICompatBackend(OpenAICompatConfig(model=self._openai_model))
+            if self._openai.is_available():
+                print(f"[{self.name}] OpenAI-compatible endpoint connected: {self._openai_model}")
+            else:
+                msg = f"[{self.name}] OpenAI-compatible endpoint unavailable: {self._openai_model}"
+                if self.config.strict_runtime:
+                    raise RuntimeError(msg)
+                print(f"{msg}, falling back to stub")
+                self._backend = "stub"
+            return
         
         
         try:
@@ -147,6 +165,8 @@ class LLMJudge(BaseJudge):
             return self._ollama.generate(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
         elif self._backend == "vllm":
             return self._vllm.generate(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
+        elif self._backend == "openai_compat":
+            return self._openai.generate(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
         else:
             # Fallback for stub/llama_cpp (simplified)
             from .ollama_backend import GenerationResult
@@ -176,6 +196,8 @@ class LLMJudge(BaseJudge):
             return await self._ollama.generate_async(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
         elif self._backend == "vllm":
             return await self._vllm.generate_async(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
+        elif self._backend == "openai_compat":
+            return await self._openai.generate_async(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
         else:
             return self._generate(prompt, system, max_tokens, json_mode, temperature)
     
@@ -236,14 +258,65 @@ class LLMJudge(BaseJudge):
         
         # Generate based on backend
         result = self._generate(prompt, system=system, max_tokens=500, json_mode=True, temperature=0.0)
-        return self._validate_multidim_response(result.text, round_id, swapped=swapped)
+        j1 = self._validate_multidim_response(result.text, round_id, swapped=swapped)
+
+        # Ensemble: run second evaluation with swapped order and average splits
+        if self.config.ensemble_judge:
+            swapped2 = not swapped
+            first2, second2 = (argument_b, argument_a) if swapped2 else (argument_a, argument_b)
+            label2_first, label2_second = ("B", "A") if swapped2 else ("A", "B")
+            prompt2 = MULTI_DIMENSION_PROMPT.format(
+                topic=topic,
+                first_arg=first2[:1500],
+                second_arg=second2[:1500],
+                first_label=label2_first,
+                second_label=label2_second,
+                first_label_lower=label2_first.lower(),
+                second_label_lower=label2_second.lower(),
+                prior_context=prior_context,
+            )
+            result2 = self._generate(prompt2, system=system, max_tokens=500, json_mode=True, temperature=0.0)
+            j2 = self._validate_multidim_response(result2.text, round_id, swapped=swapped2)
+            # Average the confidences (already account for swap in _validate_multidim_response)
+            avg_a = (j1.confidence_a + j2.confidence_a) / 2
+            avg_b = 1.0 - avg_a
+            return Judgment(
+                confidence_a=round(avg_a, 4),
+                confidence_b=round(avg_b, 4),
+                reasoning=f"[ENSEMBLE] Run1: A={j1.confidence_a:.3f}/B={j1.confidence_b:.3f} Run2: A={j2.confidence_a:.3f}/B={j2.confidence_b:.3f} | {j1.reasoning[:200]}",
+                judge_id=self.name,
+                round_id=round_id,
+            )
+        return j1
     
     def _validate_multidim_response(self, text: str, round_id: int, swapped: bool = False) -> Judgment:
         """Parse multi-dimension response, fall back to single-score if needed."""
         
         # First, try to repair truncated JSON
         repaired_text = self._repair_truncated_json(text)
-        
+
+        # --- Try AllocationJudgment first (zero-sum split format) ---
+        try:
+            alloc = AllocationJudgment.model_validate_json(repaired_text)
+            conf_a, conf_b = alloc.weighted_confidence()
+            if swapped:
+                conf_a, conf_b = conf_b, conf_a
+            reasoning = (
+                f"[ALLOC] Acc: A={alloc.accuracy_split}%/B={100-alloc.accuracy_split}%, "
+                f"Resp: A={alloc.responsiveness_split}%/B={100-alloc.responsiveness_split}%, "
+                f"Dev: A={alloc.development_split}%/B={100-alloc.development_split}% | "
+                f"{alloc.reasoning[:300]}"
+            )
+            return Judgment(
+                confidence_a=conf_a,
+                confidence_b=conf_b,
+                reasoning=reasoning,
+                judge_id=self.name,
+                round_id=round_id,
+            )
+        except Exception:
+            pass  # Fall through to legacy MultiDimensionJudgment path
+
         try:
             # Try multi-dimension parse first
             parsed = MultiDimensionJudgment.model_validate_json(repaired_text)
@@ -271,10 +344,130 @@ class LLMJudge(BaseJudge):
                 round_id=round_id
             )
         except ValidationError:
-            # Fallback: try old single-score format
+            # Try regex rescue on multi-dim fields before falling back to
+            # single-score format (which uses completely different keys and
+            # would 0.5/0.5 flatline on every multi-dim response).
+            rescued = self._rescue_multidim_regex(text, round_id, swapped=swapped)
+            if rescued is not None:
+                return rescued
+            # Only fall back to single-score if regex rescue also fails
             return self._validate_response(text, round_id, swapped=swapped)
 
     
+
+    def _rescue_multidim_regex(self, text: str, round_id: int, swapped: bool = False):
+        """Regex-based rescue for malformed multi-dimension JSON.
+
+        Tries allocation split format first (accuracy_split etc.), then falls
+        back to the legacy float format (accuracy_a, accuracy_b etc.).
+
+        When the LLM output has a minor formatting error (trailing comma,
+        unclosed string) that breaks model_validate_json, this method
+        extracts the 6 dimension scores and the reasoning string directly
+        from the raw text and calculates weighted confidence manually.
+
+        Returns a Judgment on success, None if rescue fails.
+        """
+        try:
+            # Try allocation split format first
+            def _extract_int(field):
+                m = re.search(r'"' + re.escape(field) + r'"\s*:\s*([0-9]+)', text)
+                return int(m.group(1)) if m else None
+
+            acc_split  = _extract_int("accuracy_split")
+            resp_split = _extract_int("responsiveness_split")
+            dev_split  = _extract_int("development_split")
+
+            if acc_split is not None and resp_split is not None and dev_split is not None:
+                # Clamp to valid range
+                acc_split  = max(0, min(100, acc_split))
+                resp_split = max(0, min(100, resp_split))
+                dev_split  = max(0, min(100, dev_split))
+                raw_a = 0.4*(acc_split/100) + 0.3*(resp_split/100) + 0.3*(dev_split/100)
+                margin = 2*raw_a - 1
+                conf_a = max(0.05, min(0.95, 0.5 + margin * 0.4))
+                conf_b = 1.0 - conf_a
+                if swapped:
+                    conf_a, conf_b = conf_b, conf_a
+                reasoning_match = re.search(
+                    r'"reasoning"\s*:\s*"(.*?)"(?:\s*[,}]|$)', text, re.DOTALL
+                )
+                reasoning_text = reasoning_match.group(1) if reasoning_match else "[RESCUED/ALLOC]"
+                reasoning = (
+                    f"[ALLOC/RESCUED] Acc: A={acc_split}%/B={100-acc_split}%, "
+                    f"Resp: A={resp_split}%/B={100-resp_split}%, "
+                    f"Dev: A={dev_split}%/B={100-dev_split}% | {reasoning_text[:200]}"
+                )
+                return Judgment(
+                    confidence_a=conf_a,
+                    confidence_b=conf_b,
+                    reasoning=reasoning,
+                    judge_id=self.name,
+                    round_id=round_id,
+                )
+        except Exception:
+            pass
+
+        # Fall back to legacy float format rescue
+        try:
+            def _extract_score(field):
+                m = re.search(r'"' + re.escape(field) + r'"\s*:\s*([0-9]*\.?[0-9]+)', text)
+                return float(m.group(1)) if m else None
+
+            accuracy_a    = _extract_score("accuracy_a")
+            accuracy_b    = _extract_score("accuracy_b")
+            responsive_a  = _extract_score("responsiveness_a")
+            responsive_b  = _extract_score("responsiveness_b")
+            development_a = _extract_score("development_a")
+            development_b = _extract_score("development_b")
+
+            # Need at least accuracy scores to produce a meaningful result
+            if accuracy_a is None or accuracy_b is None:
+                return None
+
+            # Fill missing dimensions with 0.5 (neutral) so partial LLM
+            # responses still produce a useful signal rather than failing
+            responsive_a  = responsive_a  if responsive_a  is not None else 0.5
+            responsive_b  = responsive_b  if responsive_b  is not None else 0.5
+            development_a = development_a if development_a is not None else 0.5
+            development_b = development_b if development_b is not None else 0.5
+
+            # Same weighted_confidence math as MultiDimensionJudgment
+            raw_a = 0.4 * accuracy_a + 0.3 * responsive_a + 0.3 * development_a
+            raw_b = 0.4 * accuracy_b + 0.3 * responsive_b + 0.3 * development_b
+            margin = raw_a - raw_b
+            conf_a = max(0.05, min(0.95, 0.5 + margin * 0.4))
+            conf_b = 1.0 - conf_a
+
+            if swapped:
+                conf_a, conf_b = conf_b, conf_a
+
+            # Extract reasoning string (non-greedy, stops at closing quote)
+            reasoning_match = re.search(
+                r'"reasoning"\s*:\s*"(.*?)"(?:\s*[,}]|$)', text, re.DOTALL
+            )
+            reasoning_text = (
+                reasoning_match.group(1) if reasoning_match
+                else "[RESCUED - reasoning truncated]"
+            )
+
+            reasoning = (
+                f"[MULTI-DIM/RESCUED] Acc: A={accuracy_a:.0%}/B={accuracy_b:.0%}, "
+                f"Resp: A={responsive_a:.0%}/B={responsive_b:.0%}, "
+                f"Dev: A={development_a:.0%}/B={development_b:.0%} | "
+                f"{reasoning_text[:200]}"
+            )
+
+            return Judgment(
+                confidence_a=conf_a,
+                confidence_b=conf_b,
+                reasoning=reasoning,
+                judge_id=self.name,
+                round_id=round_id,
+            )
+        except Exception:
+            return None
+
     def _repair_truncated_json(self, text: str) -> str:
         """Attempt to repair truncated JSON by completing missing fields and brackets.
         
@@ -444,6 +637,10 @@ class LLMJudge(BaseJudge):
             result = self._vllm.generate(prompt, system=system, max_tokens=500, json_mode=True, temperature=0.0)
             return self._validate_response(result.text, round_id)
         
+        if self._backend == "openai_compat":
+            result = self._openai.generate(prompt, system=system, max_tokens=500, json_mode=True, temperature=0.0)
+            return self._validate_response(result.text, round_id)
+        
         # llama_cpp fallback
         output = self._model(f"{system}\n\n{prompt}", max_tokens=200, stop=["</s>"], echo=False)
         return self._validate_response(output["choices"][0]["text"].strip(), round_id)
@@ -455,6 +652,7 @@ class LLMJudge(BaseJudge):
         self._model = None
         self._ollama = None
         self._vllm = None
+        self._openai = None
 
 
 class EnsembleJudge(BaseJudge):

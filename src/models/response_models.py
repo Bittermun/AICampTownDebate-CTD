@@ -75,10 +75,46 @@ class MultiDimensionJudgment(BaseModel):
         return conf_a, conf_b
 
 
+
+class AllocationJudgment(BaseModel):
+    """Zero-sum judge output using allocation splits instead of independent scores.
+
+    Each split (0-100) represents the percentage awarded to debater A on that
+    dimension; debater B receives (100 - split). This makes differentiation
+    mathematically mandatory — both sides cannot both score 80+ on the same
+    dimension.
+    """
+    accuracy_split: int = Field(ge=0, le=100, description="% of accuracy points awarded to A (B gets 100-this)")
+    responsiveness_split: int = Field(ge=0, le=100, description="% of responsiveness points awarded to A")
+    development_split: int = Field(ge=0, le=100, description="% of development points awarded to A")
+    reasoning: str = Field(min_length=1, description="Dimension-by-dimension explanation")
+
+    def weighted_confidence(self, spread_factor: float = 0.4):
+        """Convert allocation splits to normalized confidence scores.
+
+        Uses same weights as MultiDimensionJudgment:
+          accuracy=0.4, responsiveness=0.3, development=0.3
+        """
+        raw_a = (
+            0.4 * (self.accuracy_split / 100)
+            + 0.3 * (self.responsiveness_split / 100)
+            + 0.3 * (self.development_split / 100)
+        )
+        # raw_a is in [0, 1]; 0.5 = exact tie
+        margin = raw_a - (1.0 - raw_a)  # = 2*raw_a - 1, in [-1, 1]
+        conf_a = max(0.05, min(0.95, 0.5 + margin * spread_factor))
+        conf_b = 1.0 - conf_a
+        return conf_a, conf_b
+
 class DeliberationResponse(BaseModel):
     """Validated response from debater deliberation."""
     reasoning: str = Field(min_length=1, description="Strategic justification for the decision")
-    decision: str = Field(pattern=r'^(?i)(RESPOND|PASS)$', description="Strategic choice")
+    decision: str = Field(pattern=r'^(?i)(RESPOND|PASS|HOLD)$', description="Strategic choice")
+    action: str | None = Field(default=None, pattern=r'^(?i)(RESPOND|PASS|HOLD)$', description="Optional alias for decision")
+    intent: str | None = Field(default=None, description="Optional high-level intent label")
+    intent_mix: list[dict] | None = Field(default=None, description="Optional mixture of intents with weights")
+    rationale_short: str | None = Field(default=None, description="Optional concise rationale")
+    rule_refs_used: list[str] | None = Field(default=None, description="Optional rule IDs cited by the model")
     amount: float = Field(ge=0.0, description="Token amount to bet")
     max_budget: float = Field(ge=0.0, le=200.0, default=30.0, description="Maximum tokens authorized for generating the response")
     use_search: bool = Field(default=False, description="Whether to pay for a web search as part of the response")

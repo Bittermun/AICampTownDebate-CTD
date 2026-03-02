@@ -1,13 +1,16 @@
 """
 Debater: LLM wrapper for generating debate arguments.
-Supports: stub mode, llama-cpp-python, and Ollama.
+Supports: stub mode, llama-cpp-python, Ollama, vLLM, and OpenAI-compatible APIs.
 """
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 from enum import Enum
 import json
 import re
 import random
+
+from src.prompting import RuleCard, load_rule_card, render_rule_view
 
 
 class BetType(Enum):
@@ -25,6 +28,11 @@ class BetDecision:
     llm_tokens_used: int = 0  # Tokens consumed by deliberation LLM call
     max_budget: float = 30.0  # Max economic tokens to spend on generation
     use_search: bool = False  # Whether the model opted in to pay for a web search
+    intent: str = "other"
+    intent_mix: list[dict] | None = None
+    rule_refs_used: list[str] | None = None
+    rationale_short: str = ""
+    action_label: str = ""
 
 
 
@@ -36,11 +44,17 @@ class DebaterConfig:
     gpu_layers: int = 20
     context_size: int = 4096
     ev_guard_enabled: bool = True
-    ev_guard_min_ev: float = -0.03
+    ev_guard_min_ev: float = -0.20  # Loosened: losing debater needs room to try and recover
     ev_guard_edge_scale: float = 0.8
     low_balance_threshold: float = 60.0
     low_balance_bet_cap: float = 10.0
     strict_runtime: bool = True
+    kelly_enabled: bool = True          # Use Kelly criterion for sizing (replaces LLM amount)
+    kelly_scale: float = 0.5            # Fraction of edge to wager (0.5 = half-Kelly, more conservative)
+    kelly_cap: float = 0.25             # Maximum fraction of balance to stake per bet
+    verbosity_scale_enabled: bool = True  # Scale max_tokens with balance ratio
+    verbosity_base_tokens: int = 600      # Baseline max tokens for generation
+    initial_balance_ref: float = 200.0    # Reference balance (set to actual initial_balance at init)
 
 
 @dataclass
@@ -82,12 +96,33 @@ class Debater:
         elif config.model_path.startswith("vllm:"):
             self._backend = "vllm"
             self._vllm_model = config.model_path.split(":", 1)[1]
+        elif config.model_path.startswith("openai:"):
+            self._backend = "openai_compat"
+            self._openai_model = config.model_path.split(":", 1)[1]
         else:
             self._backend = "llama_cpp"
         
         self._model = None
         self._ollama = None
         self._vllm = None
+        self._openai = None
+        self._rule_card: RuleCard | None = None
+        self._rule_card_load_error: str = ""
+        self._init_rule_card()
+
+    def _init_rule_card(self) -> None:
+        path = Path("configs/rule_cards/tournament_core_v1.yaml")
+        if not path.exists():
+            return
+        try:
+            self._rule_card = load_rule_card(str(path))
+        except Exception as exc:
+            self._rule_card_load_error = str(exc)
+
+    def _rule_view_text(self, view_name: str) -> str:
+        if not self._rule_card:
+            return ""
+        return render_rule_view(self._rule_card, view_name=view_name, max_rules=8, include_ids=True)
     
     def load_model(self):
         """Load the LLM. Call this before generating."""
@@ -120,6 +155,19 @@ class Debater:
                 print(f"{msg}, falling back to stub")
                 self._backend = "stub"
             return
+
+        if self._backend == "openai_compat":
+            from .openai_compat_backend import OpenAICompatBackend, OpenAICompatConfig
+            self._openai = OpenAICompatBackend(OpenAICompatConfig(model=self._openai_model))
+            if self._openai.is_available():
+                print(f"[{self.name}] OpenAI-compatible endpoint connected: {self._openai_model}")
+            else:
+                msg = f"[{self.name}] OpenAI-compatible endpoint not available: {self._openai_model}"
+                if self.config.strict_runtime:
+                    raise RuntimeError(msg)
+                print(f"{msg}, falling back to stub")
+                self._backend = "stub"
+            return
         
         try:
             from llama_cpp import Llama
@@ -143,6 +191,8 @@ class Debater:
             return self._ollama.generate(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
         elif self._backend == "vllm":
             return self._vllm.generate(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
+        elif self._backend == "openai_compat":
+            return self._openai.generate(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
         else:
             # Fallback for stub/llama_cpp (simplified)
             from .ollama_backend import GenerationResult
@@ -164,6 +214,8 @@ class Debater:
             return await self._ollama.generate_async(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
         elif self._backend == "vllm":
             return await self._vllm.generate_async(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
+        elif self._backend == "openai_compat":
+            return await self._openai.generate_async(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
         else:
             return self._generate(prompt, system, max_tokens, json_mode, temperature)
     
@@ -205,9 +257,12 @@ class Debater:
         
         tournament_facts.append("OBJECTIVE: Maximize expected final tournament balance, not single-turn style points.")
         tournament_facts.append("COSTS: All actions cost tokens; longer outputs typically cost more.")
-        tournament_facts.append("BETTING: Total bet cost = stake + fee. PASS avoids bet stake/fee.")
-        
+        tournament_facts.append("BETTING: Total bet cost = stake + fee. HOLD avoids bet stake/fee.")
+
         economy_info = "\n\n=== SITUATION ===\n" + "\n".join(tournament_facts)
+        rules_view = self._rule_view_text("generation_compact")
+        if rules_view:
+            economy_info += "\n\n=== RULE CARD ===\n" + rules_view
         system = base_prompt + economy_info
         
         # Build prompt - include own history for consistency
@@ -233,8 +288,15 @@ class Debater:
         
         prompt = "\n\n".join(parts)
         
+        # Store balance for verbosity scaling
+        self._current_balance = current_balance
         # Determine strict generation limit
-        effective_max = max_budget_tokens or 600
+        if self.config.verbosity_scale_enabled and hasattr(self, '_current_balance') and self._current_balance is not None:
+            bal_ratio = self._current_balance / max(self.config.initial_balance_ref, 1.0)
+            scale = max(0.3, min(1.5, bal_ratio))  # clamp: 0.3x (bankrupt) → 1.5x (flush)
+            effective_max = int((max_budget_tokens or self.config.verbosity_base_tokens) * scale)
+        else:
+            effective_max = max_budget_tokens or self.config.verbosity_base_tokens
         
         # Generate based on backend
         result = self._generate(prompt, system=system, max_tokens=effective_max)
@@ -283,9 +345,12 @@ class Debater:
         if current_balance is not None:
             tournament_facts.append(f"BALANCE: {current_balance:.0f} tokens")
         tournament_facts.append("COSTS: All actions cost tokens. Longer responses cost more.")
-        tournament_facts.append("BETTING: Fees start at 5% and increase each iteration. PASS costs nothing.")
-        
+        tournament_facts.append("BETTING: Fees start at 5% and increase each iteration. HOLD costs nothing.")
+
         economy_info = "\n\n=== SITUATION ===\n" + "\n".join(tournament_facts)
+        rules_view = self._rule_view_text("generation_compact")
+        if rules_view:
+            economy_info += "\n\n=== RULE CARD ===\n" + rules_view
         system = base_prompt + economy_info
         prompt = f"Topic: {topic}\n\nYour statement:"
         
@@ -395,15 +460,17 @@ Research synthesis:"""
         confidence_opponent: float = 0.5,
         balance_change: Optional[float] = None,
         current_fee_rate: float = 0.05,
+        last_judgment_reasoning: Optional[str] = None,
+        balance_history: Optional[list] = None,  # Past balance values for trend signal
     ) -> BetDecision:
         """
-        LLM-driven deliberation: model decides whether to REFUTE, RESEARCH, or PASS.
+        LLM-driven deliberation: model decides whether to RESPOND or HOLD.
         Returns BetDecision with type, amount, and reasoning.
         confidence_self/opponent are judge scores (debaters see scores but not reasoning).
         """
         # Cannot bet if balance too low
         if balance <= 20:
-            return BetDecision(bet_type=BetType.PASS, amount=0, reasoning="Balance too low to bet.")
+            return BetDecision(bet_type=BetType.PASS, amount=0, reasoning="Balance too low to bet.", action_label="HOLD")
         
         # For stub mode, use heuristic fallback
         if self._backend == "stub":
@@ -417,10 +484,23 @@ Research synthesis:"""
                     amount=0,
                     reasoning=f"[STUB_EV_PASS] ev={ev_per_stake:.3f}, fee={current_fee_rate:.2f}",
                     use_search=False,
+                    action_label="HOLD",
                 )
             if random.random() < 0.3:
-                return BetDecision(bet_type=BetType.RESPOND, amount=10, reasoning="[STUB] Random respond/search choice", use_search=True)
-            return BetDecision(bet_type=BetType.RESPOND, amount=10, reasoning="[STUB] Random respond choice", use_search=False)
+                return BetDecision(
+                    bet_type=BetType.RESPOND,
+                    amount=10,
+                    reasoning="[STUB] Random respond/search choice",
+                    use_search=True,
+                    action_label="RESPOND",
+                )
+            return BetDecision(
+                bet_type=BetType.RESPOND,
+                amount=10,
+                reasoning="[STUB] Random respond choice",
+                use_search=False,
+                action_label="RESPOND",
+            )
         
         # LLM-driven deliberation prompt (facts only, no strategy hints)
         max_bet = min(20, balance * 0.3)
@@ -428,7 +508,20 @@ Research synthesis:"""
         feedback_str = ""
         if balance_change is not None and balance_change < 0:
             feedback_str = f"\n- LAST TURN: You spent/lost {abs(balance_change):.0f} tokens. Your balance DROPPED."
+        judgment_line = ""
+        if last_judgment_reasoning:
+            # Extract allocation numbers if present (format: [ALLOC] Acc: A=X%/B=Y%, ...)
+            judgment_line = f"\n- Last judgment: {last_judgment_reasoning[:150]}"
+        # Balance trend signal
+        trend_line = ""
+        if balance_history and len(balance_history) >= 2:
+            window = balance_history[-3:] if len(balance_history) >= 3 else balance_history
+            delta = window[-1] - window[0]
+            direction = "losing" if delta < -5 else ("gaining" if delta > 5 else "steady")
+            trend_line = f"\n- Balance trend: {delta:+.0f} over last {len(window)} rounds ({direction})"
             
+        rules_view = self._rule_view_text("deliberation_compact")
+        rules_block = f"\n\nRULE CARD:\n{rules_view}" if rules_view else ""
         deliberation_prompt = f"""CONTEXT:
 - This is one round of many. Tokens persist.
 - Balance ≤ 0 = eliminated.
@@ -437,7 +530,7 @@ STATUS:
 - Balance: {balance:.0f} tokens{feedback_str}
 - Standing: You={confidence_self:.0%} vs Other AI={confidence_opponent:.0%}
 - Costs: Variable based on response length. Current fee: {current_fee_rate:.0%}.
-- Objective: maximize expected final balance over the tournament.
+- Objective: maximize expected final balance over the tournament.{judgment_line}{trend_line}
 
 Your statement:
 {own_argument[:300]}
@@ -445,7 +538,7 @@ Your statement:
 Other AI's statement:
 {opponent_argument[:300]}
 
-OPTIONS: RESPOND | PASS
+OPTIONS: RESPOND | HOLD
 
 THINK FIRST in <thinking> tags. Reason about your ECONOMIC situation:
 - How many tokens can you afford to spend?
@@ -453,13 +546,26 @@ THINK FIRST in <thinking> tags. Reason about your ECONOMIC situation:
 - What is the minimum effective response?
 - Is search worth paying for in this spot? (use_search=true has extra token cost)
 
-Then respond JSON: {{"reasoning": "...", "decision": "RESPOND|PASS", "amount": 0-{max_bet:.0f}, "max_budget": 10-50, "use_search": true|false}}
+Then respond JSON:
+{{
+  "reasoning": "...",
+  "rationale_short": "...",
+  "decision": "RESPOND|HOLD",
+  "action": "RESPOND|HOLD",
+  "intent": "claim|investigate|challenge|revise|other",
+  "intent_mix": [{{"intent": "claim", "weight": 1.0}}],
+  "rule_refs_used": ["R_BANKRUPTCY"],
+  "amount": 0-{max_bet:.0f},
+  "max_budget": 10-50,
+  "use_search": true|false
+}}
 
 max_budget = maximum tokens you authorize spending on your response. Lower = cheaper but shorter.
-use_search = whether to pay for a web search to support your argument (costs extra tokens)."""
+use_search = whether to pay for a web search to support your argument (costs extra tokens).{rules_block}"""
 
-        system = "Think step-by-step in <thinking> tags, then output valid JSON."
+        system = "Think step-by-step in <thinking> tags, then output valid JSON only."
         
+        llm_tokens_used = 0
         try:
             # Deliberate
             # No json_mode - allow thinking tags before JSON
@@ -480,7 +586,13 @@ use_search = whether to pay for a web search to support your argument (costs ext
             )
         except Exception as e:
             # Fallback to PASS on error (safe default)
-            return BetDecision(bet_type=BetType.PASS, amount=0, reasoning=f"Fallback due to error: {e}", llm_tokens_used=llm_tokens_used)
+            return BetDecision(
+                bet_type=BetType.PASS,
+                amount=0,
+                reasoning=f"Fallback due to error: {e}",
+                llm_tokens_used=llm_tokens_used,
+                action_label="HOLD",
+            )
 
     
     def _parse_deliberation(self, response: str, balance: float, llm_tokens_used: int = 0) -> BetDecision:
@@ -503,18 +615,55 @@ use_search = whether to pay for a web search to support your argument (costs ext
         try:
             # Try direct Pydantic parse
             parsed = DeliberationResponse.model_validate_json(json_response)
-            decision = parsed.decision.upper()
-            amount = min(parsed.amount, balance * 0.3, 20)
+            action_raw = (parsed.action or parsed.decision).upper()
+            decision = "PASS" if action_raw == "HOLD" else parsed.decision.upper()
+            # Kelly criterion bet sizing: f* = edge * kelly_scale, capped at kelly_cap * balance
+            if self.config.kelly_enabled and parsed.decision.upper() == "RESPOND":
+                edge = max(0.0, confidence_self - 0.5)
+                kelly_f = edge * self.config.kelly_scale
+                kelly_amount = kelly_f * balance
+                amount = min(kelly_amount, self.config.kelly_cap * balance, balance * 0.3, 20)
+                amount = max(amount, 1.0)  # floor: never bet 0 when RESPOND
+            else:
+                amount = min(parsed.amount, balance * 0.3, 20)
             max_budget = parsed.max_budget
             use_search = parsed.use_search
+            intent = (parsed.intent or "other").lower()
+            intent_mix = parsed.intent_mix
+            rule_refs_used = parsed.rule_refs_used
+            rationale_short = parsed.rationale_short or ""
+            action_label = "HOLD" if decision == "PASS" else "RESPOND"
             
             # Combine thinking with reasoning
             full_reasoning = f"[THINKING] {thinking}\n[DECISION] {parsed.reasoning}" if thinking else parsed.reasoning
             
             if decision == 'PASS':
-                return BetDecision(bet_type=BetType.PASS, amount=0, reasoning=full_reasoning, llm_tokens_used=llm_tokens_used, max_budget=0.0)
+                return BetDecision(
+                    bet_type=BetType.PASS,
+                    amount=0,
+                    reasoning=full_reasoning,
+                    llm_tokens_used=llm_tokens_used,
+                    max_budget=0.0,
+                    intent=intent,
+                    intent_mix=intent_mix,
+                    rule_refs_used=rule_refs_used,
+                    rationale_short=rationale_short,
+                    action_label=action_label,
+                )
             else:  # RESPOND
-                return BetDecision(bet_type=BetType.RESPOND, amount=amount, reasoning=full_reasoning, llm_tokens_used=llm_tokens_used, max_budget=max_budget, use_search=use_search)
+                return BetDecision(
+                    bet_type=BetType.RESPOND,
+                    amount=amount,
+                    reasoning=full_reasoning,
+                    llm_tokens_used=llm_tokens_used,
+                    max_budget=max_budget,
+                    use_search=use_search,
+                    intent=intent,
+                    intent_mix=intent_mix,
+                    rule_refs_used=rule_refs_used,
+                    rationale_short=rationale_short,
+                    action_label=action_label,
+                )
                 
         except ValidationError:
             # Fallback: try to extract JSON from text
@@ -522,21 +671,77 @@ use_search = whether to pay for a web search to support your argument (costs ext
             if json_match:
                 try:
                     parsed = DeliberationResponse.model_validate_json(json_match.group())
-                    decision = parsed.decision.upper()
-                    amount = min(parsed.amount, balance * 0.3, 20)
+                    action_raw = (parsed.action or parsed.decision).upper()
+                    decision = "PASS" if action_raw == "HOLD" else parsed.decision.upper()
+                    # Kelly criterion bet sizing
+                    if self.config.kelly_enabled and parsed.decision.upper() == "RESPOND":
+                        edge = max(0.0, confidence_self - 0.5)
+                        kelly_f = edge * self.config.kelly_scale
+                        kelly_amount = kelly_f * balance
+                        amount = min(kelly_amount, self.config.kelly_cap * balance, balance * 0.3, 20)
+                        amount = max(amount, 1.0)
+                    else:
+                        amount = min(parsed.amount, balance * 0.3, 20)
                     max_budget = parsed.max_budget
                     use_search = parsed.use_search
+                    intent = (parsed.intent or "other").lower()
+                    intent_mix = parsed.intent_mix
+                    rule_refs_used = parsed.rule_refs_used
+                    rationale_short = parsed.rationale_short or ""
+                    action_label = "HOLD" if decision == "PASS" else "RESPOND"
                     
                     if decision == 'PASS':
-                        return BetDecision(bet_type=BetType.PASS, amount=0, reasoning=parsed.reasoning, llm_tokens_used=llm_tokens_used, max_budget=0.0)
+                        return BetDecision(
+                            bet_type=BetType.PASS,
+                            amount=0,
+                            reasoning=parsed.reasoning,
+                            llm_tokens_used=llm_tokens_used,
+                            max_budget=0.0,
+                            intent=intent,
+                            intent_mix=intent_mix,
+                            rule_refs_used=rule_refs_used,
+                            rationale_short=rationale_short,
+                            action_label=action_label,
+                        )
                     else:  # RESPOND
-                        return BetDecision(bet_type=BetType.RESPOND, amount=amount, reasoning=parsed.reasoning, llm_tokens_used=llm_tokens_used, max_budget=max_budget, use_search=use_search)
+                        return BetDecision(
+                            bet_type=BetType.RESPOND,
+                            amount=amount,
+                            reasoning=parsed.reasoning,
+                            llm_tokens_used=llm_tokens_used,
+                            max_budget=max_budget,
+                            use_search=use_search,
+                            intent=intent,
+                            intent_mix=intent_mix,
+                            rule_refs_used=rule_refs_used,
+                            rationale_short=rationale_short,
+                            action_label=action_label,
+                        )
                 except ValidationError:
                     pass
             
+            # Last-resort: check if action/decision present as bare keys before giving up
+            bare_action = re.search(r'"(?:action|decision)"\s*:\s*"(RESPOND|HOLD|PASS)"'  , response, re.IGNORECASE)
+            if bare_action:
+                act = bare_action.group(1).upper()
+                bet_type = BetType.PASS if act in ("HOLD", "PASS") else BetType.RESPOND
+                return BetDecision(
+                    bet_type=bet_type,
+                    amount=10 if bet_type == BetType.RESPOND else 0,
+                    reasoning=f"[PARTIAL_PARSE] Recovered action={act} from partial JSON",
+                    llm_tokens_used=llm_tokens_used,
+                    action_label=act if act != "PASS" else "HOLD",
+                )
             # Final fallback: PASS is safer than random action
-            fallback_reasoning = f"[THINKING] {thinking}\n[VALIDATION_FAILED] Defaulting to PASS" if thinking else f"[VALIDATION_FAILED] Defaulting to PASS (Raw: {response[:100]}...)"
-            return BetDecision(bet_type=BetType.PASS, amount=0, reasoning=fallback_reasoning, llm_tokens_used=llm_tokens_used, max_budget=0.0)
+            fallback_reasoning = f"[THINKING] {thinking}\n[VALIDATION_FAILED] Defaulting to HOLD" if thinking else f"[VALIDATION_FAILED] Defaulting to HOLD (Raw: {response[:100]}...)"
+            return BetDecision(
+                bet_type=BetType.PASS,
+                amount=0,
+                reasoning=fallback_reasoning,
+                llm_tokens_used=llm_tokens_used,
+                max_budget=0.0,
+                action_label="HOLD",
+            )
 
     def _enforce_economic_sanity(
         self,
@@ -566,6 +771,11 @@ use_search = whether to pay for a web search to support your argument (costs ext
                 llm_tokens_used=decision.llm_tokens_used,
                 max_budget=0.0,
                 use_search=False,
+                intent=decision.intent,
+                intent_mix=decision.intent_mix,
+                rule_refs_used=decision.rule_refs_used,
+                rationale_short=decision.rationale_short,
+                action_label="HOLD",
             )
         
         # Capital preservation: avoid oversized bets when balance is getting tight.
@@ -584,4 +794,5 @@ use_search = whether to pay for a web search to support your argument (costs ext
         self._model = None
         self._ollama = None
         self._vllm = None
+        self._openai = None
         print(f"[{self.name}] Model unloaded")

@@ -1,5 +1,10 @@
-import pytest
-from src.models.response_models import MultiDimensionJudgment
+import sys
+from pathlib import Path
+
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+from src.models.response_models import DeliberationResponse, MultiDimensionJudgment
 
 def test_margin_based_scoring_differentiates():
     """Verify that margin-based scoring produces wider spreads than old normalization."""
@@ -30,8 +35,8 @@ def test_margin_based_scoring_differentiates():
     # Let's check the absolute spread difference
     conf_a, conf_b = judgment_close.weighted_confidence()
     
-    assert conf_a == 0.54
-    assert conf_b == 0.46
+    assert abs(conf_a - 0.54) < 1e-9
+    assert abs(conf_b - 0.46) < 1e-9
     
     # What about A=0.9, B=0.2?
     judgment_crush = MultiDimensionJudgment(
@@ -42,8 +47,8 @@ def test_margin_based_scoring_differentiates():
     )
     # New math: margin = 0.7. Conf A = 0.5 + 0.7*0.4 = 0.78
     conf_a, conf_b = judgment_crush.weighted_confidence()
-    assert conf_a == 0.78
-    assert conf_b == 0.22
+    assert abs(conf_a - 0.78) < 1e-9
+    assert abs(conf_b - 0.22) < 1e-9
 
 def test_margin_symmetry():
     judgment_1 = MultiDimensionJudgment(
@@ -63,8 +68,8 @@ def test_margin_symmetry():
     a1, b1 = judgment_1.weighted_confidence()
     a2, b2 = judgment_2.weighted_confidence()
     
-    assert a1 == b2
-    assert b1 == a2
+    assert abs(a1 - b2) < 1e-9
+    assert abs(b1 - a2) < 1e-9
 
 def test_clamp_limits():
     # Margin = 1.0 (max possible)
@@ -77,5 +82,36 @@ def test_clamp_limits():
     # margin = 1.0. Spread factor = 0.5 (aggressive)
     conf_a, conf_b = judgment_max.weighted_confidence(spread_factor=0.5)
     # conf_a = 0.5 + 0.5 = 1.0. But clamped to 0.95!
-    assert conf_a == 0.95
-    assert conf_b == 0.05
+    assert abs(conf_a - 0.95) < 1e-9
+    assert abs(conf_b - 0.05) < 1e-9
+
+
+def test_deliberation_response_accepts_hold_and_metadata():
+    payload = DeliberationResponse.model_validate_json(
+        """
+        {
+          "reasoning": "Conserve capital under high fee pressure.",
+          "decision": "HOLD",
+          "action": "HOLD",
+          "intent": "investigate",
+          "intent_mix": [{"intent": "investigate", "weight": 0.7}, {"intent": "hold", "weight": 0.3}],
+          "rationale_short": "High fee and low balance.",
+          "rule_refs_used": ["R_BANKRUPTCY", "R_FEE_GROWTH"],
+          "amount": 0,
+          "max_budget": 20,
+          "use_search": false
+        }
+        """
+    )
+    assert payload.decision.upper() == "HOLD"
+    assert payload.action and payload.action.upper() == "HOLD"
+    assert payload.intent == "investigate"
+    assert payload.rule_refs_used == ["R_BANKRUPTCY", "R_FEE_GROWTH"]
+
+
+if __name__ == "__main__":
+    test_margin_based_scoring_differentiates()
+    test_margin_symmetry()
+    test_clamp_limits()
+    test_deliberation_response_accepts_hold_and_metadata()
+    print("test_response_models: PASS")
