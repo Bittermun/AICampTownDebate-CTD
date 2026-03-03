@@ -6,11 +6,12 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from datetime import datetime, timezone
+import os
 from pathlib import Path
 import json
 import subprocess
 import sys
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
@@ -33,6 +34,27 @@ def _parse_csv_str(raw: str) -> List[str]:
     return [x.strip() for x in raw.split(",") if x.strip()]
 
 
+def _is_openai_model(model_id: Optional[str]) -> bool:
+    return bool(model_id) and str(model_id).startswith("openai:")
+
+
+def _build_jobs(
+    seeds: List[int],
+    labels: List[str],
+    openai_base_urls: List[str],
+    model_id: str,
+    judge_model: Optional[str],
+) -> List[Tuple[int, str, Optional[str]]]:
+    jobs: List[Tuple[int, str, Optional[str]]] = []
+    use_endpoints = bool(openai_base_urls) and (
+        _is_openai_model(model_id) or _is_openai_model(judge_model)
+    )
+    for idx, (seed, label) in enumerate((seed, label) for seed in seeds for label in labels):
+        endpoint = openai_base_urls[idx % len(openai_base_urls)] if use_endpoints else None
+        jobs.append((seed, label, endpoint))
+    return jobs
+
+
 def _run_once(
     *,
     config: str,
@@ -49,6 +71,7 @@ def _run_once(
     allow_stub: bool,
     refresh_live_cache: bool,
     cache_only_live: bool,
+    openai_base_url: Optional[str],
 ) -> int:
     cmd = [
         sys.executable,
@@ -82,11 +105,14 @@ def _run_once(
         cmd.append("--refresh-live-cache")
     if cache_only_live:
         cmd.append("--cache-only-live")
-    proc = subprocess.run(cmd, text=True)
+    env = os.environ.copy()
+    if openai_base_url:
+        env["OPENAI_COMPAT_BASE_URL"] = openai_base_url
+    proc = subprocess.run(cmd, text=True, env=env)
     return int(proc.returncode)
 
 
-def _run_job(args, batch_id: str, seed: int, matrix_label: str) -> List[BatchRunRecord]:
+def _run_job(args, batch_id: str, seed: int, matrix_label: str, openai_base_url: Optional[str]) -> List[BatchRunRecord]:
     run_id = f"seed{seed}_{matrix_label}"
     batch_root = Path(args.output_dir) / batch_id
     replacement_roster = _parse_csv_str(args.replacement_roster)
@@ -131,6 +157,7 @@ def _run_job(args, batch_id: str, seed: int, matrix_label: str) -> List[BatchRun
                 allow_stub=args.allow_stub,
                 refresh_live_cache=args.refresh_live_cache and attempt == 1,
                 cache_only_live=args.cache_only_live,
+                openai_base_url=openai_base_url,
             )
 
             bankrupt = False
@@ -161,6 +188,7 @@ def _run_job(args, batch_id: str, seed: int, matrix_label: str) -> List[BatchRun
                 live_source_failures=len(payload.get("live_source_failures", [])) if payload else 0,
                 original_model_id=args.model_id,
                 effective_model_id=model_id,
+                openai_base_url=openai_base_url,
                 was_replaced=was_replaced,
                 replacement_index=replacement_index,
                 replaced_from_run_id=replaced_from_run_id,
@@ -239,10 +267,16 @@ def main() -> int:
     p.add_argument("--allow-stub", action="store_true")
     p.add_argument("--refresh-live-cache", action="store_true")
     p.add_argument("--cache-only-live", action="store_true")
+    p.add_argument(
+        "--openai-base-urls",
+        default="",
+        help="Comma-separated endpoint roster for openai:* models. Jobs are assigned round-robin.",
+    )
     args = p.parse_args()
 
     seeds = _parse_csv_int(args.seeds)
     labels = _parse_csv_str(args.matrix_labels)
+    openai_base_urls = _parse_csv_str(args.openai_base_urls)
     if not seeds or not labels:
         raise ValueError("seeds and matrix-labels must be non-empty")
 
@@ -250,22 +284,33 @@ def main() -> int:
     batch_root = Path(args.output_dir) / batch_id
     batch_root.mkdir(parents=True, exist_ok=True)
 
-    jobs = [(seed, label) for seed in seeds for label in labels]
+    jobs = _build_jobs(
+        seeds=seeds,
+        labels=labels,
+        openai_base_urls=openai_base_urls,
+        model_id=args.model_id,
+        judge_model=args.judge_model,
+    )
     records: List[BatchRunRecord] = []
+
+    if openai_base_urls and not (_is_openai_model(args.model_id) or _is_openai_model(args.judge_model)):
+        print("[batch][warn] --openai-base-urls ignored because model/judge are not openai:*")
 
     with ThreadPoolExecutor(max_workers=max(1, int(args.concurrency))) as ex:
         futs = {
-            ex.submit(_run_job, args, batch_id, seed, label): (seed, label)
-            for seed, label in jobs
+            ex.submit(_run_job, args, batch_id, seed, label, endpoint): (seed, label, endpoint)
+            for seed, label, endpoint in jobs
         }
         for fut in as_completed(futs):
-            seed, label = futs[fut]
+            seed, label, endpoint = futs[fut]
             try:
                 for rec in fut.result():
                     records.append(rec)
+                    endpoint_note = f" endpoint={rec.openai_base_url}" if rec.openai_base_url else ""
                     print(
                         f"[batch] seed={seed} label={label} run_id={rec.run_id} attempt={rec.attempt} "
-                        f"model={rec.effective_model_id or args.model_id} bankrupt={rec.bankrupt} final_pass={rec.final_pass}"
+                        f"model={rec.effective_model_id or args.model_id}{endpoint_note} "
+                        f"bankrupt={rec.bankrupt} final_pass={rec.final_pass}"
                     )
             except Exception as exc:
                 print(f"[batch][ERROR] seed={seed} label={label}: {exc}")
@@ -282,6 +327,7 @@ def main() -> int:
                         terminal_bankrupt=False,
                         original_model_id=args.model_id,
                         effective_model_id=args.model_id,
+                        openai_base_url=endpoint,
                     )
                 )
 
@@ -305,6 +351,8 @@ def main() -> int:
         "replacement_roster": _parse_csv_str(args.replacement_roster),
         "replacement_judge_model": args.replacement_judge_model,
         "max_replacements_per_run": args.max_replacements_per_run,
+        "openai_base_urls": openai_base_urls,
+        "openai_endpoint_strategy": "round_robin" if openai_base_urls else "none",
         "records": [asdict(r) for r in records],
     }
     (batch_root / "batch_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")

@@ -1,0 +1,25 @@
+# Fast test config for memory playbook
+models:
+  judge_type: single
+  randomize_argument_order: false
+  debaters:
+    - name: "Alpha"
+      model: "qwen2.5:1.5b"
+    - name: "Beta"
+      model: "qwen2.5:1.5b"
+  judges:
+    - model: "qwen2.5:1.5b"
+
+economy:
+  initial_balance: 100
+  max_debt: 50
+  tokens_per_round: 20
+  split_pot_enabled: false
+
+rounds:
+  num_rounds: 3
+  max_iterations: 2
+  topics:
+    - "Is zero-sum thinking harmful in business?"
+    - "Does open source software guarantee better security?"
+    - "Should standardized testing be abolished?"

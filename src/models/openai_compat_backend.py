@@ -1,11 +1,13 @@
 """Generic OpenAI-compatible backend for local or remote inference servers.
 
-Supports providers that expose `/v1/chat/completions` and `/v1/models`.
+Supports providers that expose OpenAI-compatible chat/models APIs on `/v1`
+or `/v3` prefixes.
 Examples include local Intel-friendly stacks that provide an OpenAI-compatible
 gateway, and paid remote GPU endpoints.
 """
 import json
 import os
+import time
 from dataclasses import dataclass
 from typing import Optional
 
@@ -20,6 +22,8 @@ class OpenAICompatConfig:
     model: str = os.getenv("OPENAI_COMPAT_MODEL", "Qwen/Qwen2.5-1.5B-Instruct")
     timeout: int = 120
     api_key: Optional[str] = os.getenv("OPENAI_COMPAT_API_KEY")
+    api_version: str = os.getenv("OPENAI_COMPAT_API_VERSION", "auto").lower()
+    healthcheck_ttl_sec: int = int(os.getenv("OPENAI_COMPAT_HEALTHCHECK_TTL_SEC", "30"))
 
 
 class OpenAICompatBackend:
@@ -27,6 +31,11 @@ class OpenAICompatBackend:
 
     def __init__(self, config: Optional[OpenAICompatConfig] = None):
         self.config = config or OpenAICompatConfig()
+        self._session = requests.Session()
+        self._resolved_models_url: Optional[str] = None
+        self._resolved_api_version: Optional[str] = None
+        self._availability_cached = False
+        self._availability_checked_at = 0.0
 
     def _headers(self) -> dict:
         headers = {"Content-Type": "application/json"}
@@ -34,31 +43,188 @@ class OpenAICompatBackend:
             headers["Authorization"] = f"Bearer {self.config.api_key}"
         return headers
 
-    def _models_url_candidates(self) -> list[str]:
+    def _base_and_embedded_version(self) -> tuple[str, Optional[str]]:
         base = self.config.base_url.rstrip("/")
-        return [f"{base}/v1/models", f"{base}/models"]
+        for version in ("v1", "v3"):
+            suffix = f"/{version}"
+            if base.lower().endswith(suffix):
+                return base[: -len(suffix)], version
+        return base, None
+
+    def _candidate_versions(self, prioritize_resolved: bool = False) -> list[str]:
+        base, embedded = self._base_and_embedded_version()
+        del base  # base only used for embedded detection above
+        requested = (self.config.api_version or "auto").strip().lower()
+        if requested not in {"auto", "v1", "v3"}:
+            requested = "auto"
+
+        versions: list[str] = []
+        if prioritize_resolved and self._resolved_api_version is not None:
+            versions.append(self._resolved_api_version)
+
+        if requested == "auto":
+            if embedded:
+                versions.append(embedded)
+            versions.extend(["v1", "v3", ""])
+        else:
+            versions.extend([requested, ""])
+
+        deduped: list[str] = []
+        for version in versions:
+            if version not in deduped:
+                deduped.append(version)
+        return deduped
+
+    def _models_url_candidates(self) -> list[tuple[str, str]]:
+        base, _ = self._base_and_embedded_version()
+        out: list[tuple[str, str]] = []
+        for version in self._candidate_versions(prioritize_resolved=False):
+            if version:
+                out.append((version, f"{base}/{version}/models"))
+            else:
+                out.append((version, f"{base}/models"))
+        return out
+
+    def _chat_url_candidates(self) -> list[str]:
+        base, _ = self._base_and_embedded_version()
+        out: list[str] = []
+        for version in self._candidate_versions(prioritize_resolved=True):
+            if version:
+                out.append(f"{base}/{version}/chat/completions")
+            else:
+                out.append(f"{base}/chat/completions")
+        return out
+
+    def _probe_models_endpoint(self) -> Optional[str]:
+        for version, url in self._models_url_candidates():
+            try:
+                resp = self._session.get(url, headers=self._headers(), timeout=5)
+                if resp.status_code == 200:
+                    self._resolved_models_url = url
+                    self._resolved_api_version = version
+                    return url
+            except Exception:
+                continue
+        self._resolved_models_url = None
+        self._resolved_api_version = None
+        return None
+
+    def _refresh_availability(self, force: bool = False) -> bool:
+        now = time.monotonic()
+        ttl = max(0, int(self.config.healthcheck_ttl_sec))
+        if not force and self._availability_checked_at > 0 and (now - self._availability_checked_at) <= ttl:
+            return self._availability_cached
+
+        self._availability_cached = self._probe_models_endpoint() is not None
+        self._availability_checked_at = now
+        return self._availability_cached
+
+    def _build_payload(
+        self,
+        prompt: str,
+        system: Optional[str],
+        max_tokens: int,
+        json_mode: bool,
+        temperature: float,
+    ) -> dict:
+        payload = {
+            "model": self.config.model,
+            "messages": ([{"role": "system", "content": system}] if system else [])
+            + [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": False,
+        }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
+        return payload
 
     def is_available(self) -> bool:
-        for url in self._models_url_candidates():
-            try:
-                resp = requests.get(url, headers=self._headers(), timeout=5)
-                if resp.status_code == 200:
-                    return True
-            except Exception:
-                continue
-        return False
+        return self._refresh_availability(force=False)
 
     def list_models(self) -> list[str]:
-        for url in self._models_url_candidates():
+        url = self._resolved_models_url or self._probe_models_endpoint()
+        if not url:
+            return []
+        try:
+            resp = self._session.get(url, headers=self._headers(), timeout=10)
+            if resp.status_code != 200:
+                return []
+            data = resp.json()
+            return [m.get("id", "") for m in data.get("data", []) if m.get("id")]
+        except Exception:
+            return []
+
+    def _parse_generation_payload(self, data: dict) -> GenerationResult:
+        if "choices" not in data:
+            return GenerationResult(
+                text=f"[OPENAI_COMPAT_ERROR] Unexpected response: {json.dumps(data)[:400]}",
+                tokens_used=0,
+            )
+
+        message = data["choices"][0].get("message", {})
+        text = (message.get("content") or "").strip()
+        usage = data.get("usage", {}) if isinstance(data.get("usage", {}), dict) else {}
+        tokens_used = int(usage.get("completion_tokens", 0) or 0)
+        return GenerationResult(text=text, tokens_used=tokens_used)
+
+    def _post_sync(self, payload: dict) -> GenerationResult:
+        for url in self._chat_url_candidates():
             try:
-                resp = requests.get(url, headers=self._headers(), timeout=10)
-                if resp.status_code != 200:
+                resp = self._session.post(
+                    url,
+                    json=payload,
+                    headers=self._headers(),
+                    timeout=self.config.timeout,
+                )
+                if resp.status_code in (404, 405):
                     continue
                 data = resp.json()
-                return [m.get("id", "") for m in data.get("data", []) if m.get("id")]
-            except Exception:
-                continue
-        return []
+                parsed = self._parse_generation_payload(data)
+                if parsed.text.startswith("[OPENAI_COMPAT_ERROR]") and resp.status_code in (404, 405):
+                    continue
+                return parsed
+            except Exception as exc:
+                err = str(exc)
+                if "404" in err:
+                    continue
+                return GenerationResult(text=f"[OPENAI_COMPAT_ERROR] {exc}", tokens_used=0)
+
+        self._availability_cached = False
+        self._availability_checked_at = time.monotonic()
+        return GenerationResult(text="[OPENAI_COMPAT_UNAVAILABLE] Endpoint not responding", tokens_used=0)
+
+    async def _post_async(self, payload: dict) -> GenerationResult:
+        try:
+            import aiohttp
+        except ImportError:
+            return self._post_sync(payload)
+
+        timeout = aiohttp.ClientTimeout(total=self.config.timeout)
+        for url in self._chat_url_candidates():
+            try:
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.post(
+                        url,
+                        json=payload,
+                        headers=self._headers(),
+                    ) as resp:
+                        if resp.status in (404, 405):
+                            continue
+                        data = await resp.json()
+                        parsed = self._parse_generation_payload(data)
+                        if parsed.text.startswith("[OPENAI_COMPAT_ERROR]") and resp.status in (404, 405):
+                            continue
+                        return parsed
+            except Exception as exc:
+                err = str(exc)
+                if "404" in err:
+                    continue
+                return GenerationResult(text=f"[ASYNC_OPENAI_COMPAT_ERROR] {exc}", tokens_used=0)
+
+        self._availability_cached = False
+        self._availability_checked_at = time.monotonic()
+        return GenerationResult(text="[OPENAI_COMPAT_UNAVAILABLE] Endpoint not responding", tokens_used=0)
 
     def generate(
         self,
@@ -71,38 +237,14 @@ class OpenAICompatBackend:
         if not self.is_available():
             return GenerationResult(text="[OPENAI_COMPAT_UNAVAILABLE] Endpoint not responding", tokens_used=0)
 
-        base = self.config.base_url.rstrip("/")
-        payload = {
-            "model": self.config.model,
-            "messages": ([{"role": "system", "content": system}] if system else [])
-            + [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "stream": False,
-        }
-        if json_mode:
-            payload["response_format"] = {"type": "json_object"}
-
-        try:
-            resp = requests.post(
-                f"{base}/v1/chat/completions",
-                json=payload,
-                headers=self._headers(),
-                timeout=self.config.timeout,
-            )
-            data = resp.json()
-            if "choices" not in data:
-                return GenerationResult(
-                    text=f"[OPENAI_COMPAT_ERROR] Unexpected response: {json.dumps(data)[:400]}",
-                    tokens_used=0,
-                )
-            message = data["choices"][0].get("message", {})
-            text = (message.get("content") or "").strip()
-            usage = data.get("usage", {}) if isinstance(data.get("usage", {}), dict) else {}
-            tokens_used = int(usage.get("completion_tokens", 0) or 0)
-            return GenerationResult(text=text, tokens_used=tokens_used)
-        except Exception as exc:
-            return GenerationResult(text=f"[OPENAI_COMPAT_ERROR] {exc}", tokens_used=0)
+        payload = self._build_payload(
+            prompt=prompt,
+            system=system,
+            max_tokens=max_tokens,
+            json_mode=json_mode,
+            temperature=temperature,
+        )
+        return self._post_sync(payload)
 
     async def generate_async(
         self,
@@ -112,44 +254,20 @@ class OpenAICompatBackend:
         json_mode: bool = False,
         temperature: float = 0.8,
     ) -> GenerationResult:
-        try:
-            import aiohttp
-        except ImportError:
-            return self.generate(prompt, system, max_tokens, json_mode, temperature)
-
         if not self.is_available():
             return GenerationResult(text="[OPENAI_COMPAT_UNAVAILABLE] Endpoint not responding", tokens_used=0)
 
-        base = self.config.base_url.rstrip("/")
-        payload = {
-            "model": self.config.model,
-            "messages": ([{"role": "system", "content": system}] if system else [])
-            + [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "stream": False,
-        }
-        if json_mode:
-            payload["response_format"] = {"type": "json_object"}
+        payload = self._build_payload(
+            prompt=prompt,
+            system=system,
+            max_tokens=max_tokens,
+            json_mode=json_mode,
+            temperature=temperature,
+        )
+        return await self._post_async(payload)
 
+    def __del__(self):
         try:
-            timeout = aiohttp.ClientTimeout(total=self.config.timeout)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(
-                    f"{base}/v1/chat/completions",
-                    json=payload,
-                    headers=self._headers(),
-                ) as resp:
-                    data = await resp.json()
-                    if "choices" not in data:
-                        return GenerationResult(
-                            text=f"[OPENAI_COMPAT_ERROR] Unexpected response: {json.dumps(data)[:400]}",
-                            tokens_used=0,
-                        )
-                    message = data["choices"][0].get("message", {})
-                    text = (message.get("content") or "").strip()
-                    usage = data.get("usage", {}) if isinstance(data.get("usage", {}), dict) else {}
-                    tokens_used = int(usage.get("completion_tokens", 0) or 0)
-                    return GenerationResult(text=text, tokens_used=tokens_used)
-        except Exception as exc:
-            return GenerationResult(text=f"[ASYNC_OPENAI_COMPAT_ERROR] {exc}", tokens_used=0)
+            self._session.close()
+        except Exception:
+            pass

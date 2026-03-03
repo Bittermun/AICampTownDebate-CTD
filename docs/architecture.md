@@ -16,8 +16,9 @@ AICampTownDebate currently centers on a two-debater tournament loop with a share
 
 ### Debaters
 - File: `src/models/debater.py`
-- Supports `ollama:`, `vllm:`, `stub`, and llama.cpp path modes.
+- Supports `ollama:`, `vllm:`, `openai:`, `stub`, and llama.cpp path modes.
 - Tracks generation token usage and exposes deliberation with budget control (`max_budget`).
+- Loads compact prompt rule cards from `configs/rule_cards/` when present.
 
 ### Judges
 - File: `src/models/judge.py`
@@ -45,13 +46,29 @@ AICampTownDebate currently centers on a two-debater tournament loop with a share
 - File: `src/logs/transcript.py`
 - Saves JSON + Markdown transcripts with arguments, deliberations, judgments, payouts.
 
+### Benchmark Orchestrator
+- Files: `src/benchmark/*.py`
+- Runs phase-1 benchmark policy across seeds.
+- Tracks gate outcomes, score provenance (`fixture_static` vs `model_derived`), and artifact manifests.
+
+### Prompting
+- Files: `src/prompting/*.py`
+- Rule-card loader/rendering for compact, versioned prompt controls.
+
+### Integrations
+- Files: `src/integrations/*.py`
+- Match registry storage for cross-session tournament and leaderboard analysis (SQLite/Postgres).
+
 ## Repository Map
 
 - `src/config_loader.py`: YAML config loader
 - `src/models/`: debaters, judges, backends, response schemas
+- `src/prompting/`: rule-card loading and prompt view rendering
 - `src/economy/`: ledger, betting, distribution
 - `src/arena/`: dynamic round, tournament, observers
+- `src/benchmark/`: phase-1 benchmark policy execution and scoring
 - `src/logs/`: transcript generation
+- `src/integrations/`: cross-session persistence integrations
 - `src/tools/research.py`: DDGS web search integration
 - `tests/`: verification and stress scripts
 - `configs/`: tournament config presets
@@ -67,6 +84,4 @@ Key fields:
 - `economy`: balances/pot parameters
 - `rounds.num_rounds`, `rounds.max_iterations`, `rounds.topics`
 
-## Not Yet Implemented
-
-This codebase does not currently implement Swiss pairing or ELO tier movement.
+League/ranking and benchmark controls are defined in `configs/benchmark_phase1.yaml`.

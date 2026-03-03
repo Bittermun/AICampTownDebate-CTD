@@ -9,6 +9,7 @@ param(
     [string]$SourceMode = "core_live_stretch_fixture",
     [int]$Concurrency = 2,
     [int]$BankruptcyRetries = 1,
+    [string]$OpenAIBaseUrls = "",
     [switch]$AllowStub,
     [switch]$RefreshLiveCache,
     [switch]$CacheOnlyLive
@@ -33,9 +34,9 @@ $cmd = @(
 if ($AllowStub) { $cmd += "--allow-stub" }
 if ($RefreshLiveCache) { $cmd += "--refresh-live-cache" }
 if ($CacheOnlyLive) { $cmd += "--cache-only-live" }
+if ($OpenAIBaseUrls) { $cmd += @("--openai-base-urls", $OpenAIBaseUrls) }
 
 python @cmd
 if ($LASTEXITCODE -ne 0) {
     throw "Batch run failed with exit code $LASTEXITCODE"
 }
-

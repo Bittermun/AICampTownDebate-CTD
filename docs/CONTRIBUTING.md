@@ -37,16 +37,32 @@ pip install -r requirements.txt
 Optional runtime services:
 - Ollama for `ollama:` models
 - vLLM for `vllm:` models
+- OpenAI-compatible endpoint for `openai:` models
 
 ## Validation
 
-Run verification suite:
+Run compatibility and unit suites:
 
 ```bash
 python tests/test_suite.py
 ```
 
-Run judge variance stress test:
+Run benchmark smoke checks:
+
+```bash
+python tests/test_benchmark_runner.py
+python tests/test_benchmark_score_sources.py
+python tests/test_benchmark_batch_utils.py
+```
+
+Run invariant checks:
+
+```bash
+python tests/test_econ_invariants.py
+python tests/test_selection_health_hold_semantics.py
+```
+
+Run judge variance stress test (runtime dependent):
 
 ```bash
 python tests/stress_judge_variance.py --model ollama:qwen2.5:1.5b
@@ -65,3 +81,4 @@ python demo_tournament.py --config configs/tournament_config.yaml --gate-judge-v
 - Keep parsing/validation explicit at LLM boundaries.
 - Prefer tests for behavior changes in judge/economy/round logic.
 - Document meaningful architectural changes in `DEVLOG.md`.
+- If behavior changes benchmark or provenance semantics, update `docs/BENCHMARK_PROTOCOL.md` and `docs/EVALUATION_CONTRACT.md` in the same PR.

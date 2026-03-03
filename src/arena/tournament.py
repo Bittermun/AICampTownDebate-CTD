@@ -143,6 +143,24 @@ class Tournament:
                 result = debate_round.run(topic, round_id, transcript=round_transcript)
                 self._results.append(result)
                 
+                # Record outcome into debater memory for cross-round learning
+                if hasattr(self.debater_a, 'memory'):
+                    self.debater_a.memory.record_outcome(
+                        round_id=round_id,
+                        topic=topic,
+                        confidence_self=result.final_judgment.confidence_a,
+                        confidence_opponent=result.final_judgment.confidence_b,
+                        judgment_reasoning=result.final_judgment.reasoning,
+                    )
+                if hasattr(self.debater_b, 'memory'):
+                    self.debater_b.memory.record_outcome(
+                        round_id=round_id,
+                        topic=topic,
+                        confidence_self=result.final_judgment.confidence_b,
+                        confidence_opponent=result.final_judgment.confidence_a,
+                        judgment_reasoning=result.final_judgment.reasoning,
+                    )
+                
                 # Print round summary
                 print(f"  Confidence: A={result.final_judgment.confidence_a:.2f}, B={result.final_judgment.confidence_b:.2f}")
                 print(f"  Tokens: A={result.tokens_awarded_a:.1f}, B={result.tokens_awarded_b:.1f}")

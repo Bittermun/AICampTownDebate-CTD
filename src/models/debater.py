@@ -11,6 +11,7 @@ import re
 import random
 
 from src.prompting import RuleCard, load_rule_card, render_rule_view
+from src.memory import StrategyMemory
 
 
 class BetType(Enum):
@@ -109,6 +110,7 @@ class Debater:
         self._rule_card: RuleCard | None = None
         self._rule_card_load_error: str = ""
         self._init_rule_card()
+        self.memory = StrategyMemory()
 
     def _init_rule_card(self) -> None:
         path = Path("configs/rule_cards/tournament_core_v1.yaml")
@@ -332,7 +334,7 @@ class Debater:
         Simplified for initial arguments only (no opponent_argument or history).
         Uses async backend for non-blocking generation.
         """
-        if self._backend not in ["ollama", "vllm"]:
+        if self._backend not in ["ollama", "vllm", "openai_compat"]:
             # Fallback to sync for non-api backends
             return self.generate_argument(topic, round_id, current_balance=current_balance)
         
@@ -378,25 +380,31 @@ class Debater:
         
         Model is encouraged to provide evidence and citations.
         """
-        system = "You are a research AI. Provide factual, evidence-based claims with clear reasoning."
-        
-        tournament_facts = []
+        # Research is a COSTLY strategic action. Frame it economically, not academically.
+        tournament_facts = [
+            "TOURNAMENT: This is one round of many. Tokens persist across rounds.",
+            "ELIMINATION: Balance <= 0 = disqualified.",
+        ]
         if current_balance is not None:
-            tournament_facts.append(f"CURRENT BALANCE: {current_balance:.0f} tokens")
+            tournament_facts.append(f"BALANCE: {current_balance:.0f} tokens. You paid to search - make it count.")
         if confidence_self is not None and confidence_opponent is not None:
             tournament_facts.append(f"STANDING: You={confidence_self:.0%} vs Opponent={confidence_opponent:.0%}")
-            
+        tournament_facts.append("OBJECTIVE: Your research must shift the judge enough to recoup your search cost. Be decisive.")
+
+        economy_info = "\n\n=== SITUATION ===\n" + "\n".join(tournament_facts)
+        system = (
+            "You are a debate researcher under economic constraints. Provide the most judge-persuasive "
+            "evidence. Conciseness matters - verbosity costs tokens."
+        ) + economy_info
+
         research_prompt = f"""Topic: {topic}
 Your current position:
 {own_argument[:500]}
 
-TASK: Provide the strongest factual evidence to support your position or refute counter-claims.
-Include thinking tags <thinking></thinking> if you have multiple options.
+TASK: Provide the most decisive factual evidence or refutation to shift the judge in your favor.
+Be specific and cite-worthy. You may use <thinking></thinking> to plan which angle has highest impact.
 
 Research synthesis:"""
-
-        if tournament_facts:
-            system += "\n\nSITUATION:\n" + "\n".join(tournament_facts)
 
         result = self._generate(research_prompt, system=system, max_tokens=400)
         
@@ -520,6 +528,12 @@ Research synthesis:"""
             direction = "losing" if delta < -5 else ("gaining" if delta > 5 else "steady")
             trend_line = f"\n- Balance trend: {delta:+.0f} over last {len(window)} rounds ({direction})"
             
+        playbook_line = ""
+        if hasattr(self, 'memory'):
+            pb = self.memory.render_playbook()
+            if pb:
+                playbook_line = f"\n\nPLAYBOOK (your past rounds):\n{pb}"
+                
         rules_view = self._rule_view_text("deliberation_compact")
         rules_block = f"\n\nRULE CARD:\n{rules_view}" if rules_view else ""
         deliberation_prompt = f"""CONTEXT:
@@ -530,10 +544,10 @@ STATUS:
 - Balance: {balance:.0f} tokens{feedback_str}
 - Standing: You={confidence_self:.0%} vs Other AI={confidence_opponent:.0%}
 - Costs: Variable based on response length. Current fee: {current_fee_rate:.0%}.
-- Objective: maximize expected final balance over the tournament.{judgment_line}{trend_line}
+- Objective: maximize expected final balance over the tournament.{judgment_line}{trend_line}{playbook_line}
 
-Your statement:
-{own_argument[:300]}
+Your statement (opening + close):
+{own_argument[:150]}{'...' if len(own_argument) > 300 else ''}{own_argument[-150:] if len(own_argument) > 300 else ''}
 
 Other AI's statement:
 {opponent_argument[:300]}
@@ -574,7 +588,12 @@ use_search = whether to pay for a web search to support your argument (costs ext
             llm_tokens_used = result.tokens_used
                 
             # Parse response with Pydantic
-            decision = self._parse_deliberation(response, balance, llm_tokens_used)
+            decision = self._parse_deliberation(
+                response,
+                balance,
+                llm_tokens_used=llm_tokens_used,
+                confidence_self=confidence_self,
+            )
             if not self.config.ev_guard_enabled:
                 return decision
             return self._enforce_economic_sanity(
@@ -595,7 +614,13 @@ use_search = whether to pay for a web search to support your argument (costs ext
             )
 
     
-    def _parse_deliberation(self, response: str, balance: float, llm_tokens_used: int = 0) -> BetDecision:
+    def _parse_deliberation(
+        self,
+        response: str,
+        balance: float,
+        llm_tokens_used: int = 0,
+        confidence_self: Optional[float] = None,
+    ) -> BetDecision:
         """Parse LLM deliberation response with Pydantic validation.
         
         Extracts <thinking> tags for ITMC analysis before parsing JSON decision.
@@ -603,6 +628,9 @@ use_search = whether to pay for a web search to support your argument (costs ext
         from pydantic import ValidationError
         from .response_models import DeliberationResponse
         
+        # Use a neutral edge when confidence is unavailable (direct parser tests).
+        confidence_hint = 0.5 if confidence_self is None else float(confidence_self)
+
         # Extract thinking (ITMC) before JSON parsing
         thinking = ""
         thinking_match = re.search(r'<thinking>(.*?)</thinking>', response, re.DOTALL)
@@ -619,7 +647,7 @@ use_search = whether to pay for a web search to support your argument (costs ext
             decision = "PASS" if action_raw == "HOLD" else parsed.decision.upper()
             # Kelly criterion bet sizing: f* = edge * kelly_scale, capped at kelly_cap * balance
             if self.config.kelly_enabled and parsed.decision.upper() == "RESPOND":
-                edge = max(0.0, confidence_self - 0.5)
+                edge = max(0.0, confidence_hint - 0.5)
                 kelly_f = edge * self.config.kelly_scale
                 kelly_amount = kelly_f * balance
                 amount = min(kelly_amount, self.config.kelly_cap * balance, balance * 0.3, 20)
@@ -675,7 +703,7 @@ use_search = whether to pay for a web search to support your argument (costs ext
                     decision = "PASS" if action_raw == "HOLD" else parsed.decision.upper()
                     # Kelly criterion bet sizing
                     if self.config.kelly_enabled and parsed.decision.upper() == "RESPOND":
-                        edge = max(0.0, confidence_self - 0.5)
+                        edge = max(0.0, confidence_hint - 0.5)
                         kelly_f = edge * self.config.kelly_scale
                         kelly_amount = kelly_f * balance
                         amount = min(kelly_amount, self.config.kelly_cap * balance, balance * 0.3, 20)

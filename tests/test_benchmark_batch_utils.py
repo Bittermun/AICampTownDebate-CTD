@@ -121,9 +121,27 @@ def test_summarize_batch_replacement_metrics():
     assert agg["replacement_success_rate"] == 1.0
 
 
+def test_batch_record_serializes_openai_endpoint():
+    row = BatchRunRecord(
+        run_id="r3",
+        attempt=1,
+        seed=303,
+        topic_set="set01",
+        summary_path="c.json",
+        registry_path="c-reg.json",
+        return_code=0,
+        bankrupt=False,
+        terminal_bankrupt=False,
+        openai_base_url="http://arc:8000",
+    )
+    payload = row.to_dict()
+    assert payload["openai_base_url"] == "http://arc:8000"
+
+
 if __name__ == "__main__":
     test_detect_bankruptcy_from_summary()
     test_retry_policy()
     test_summarize_batch()
     test_summarize_batch_replacement_metrics()
+    test_batch_record_serializes_openai_endpoint()
     print("test_benchmark_batch_utils: PASS")

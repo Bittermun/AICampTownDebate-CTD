@@ -678,6 +678,7 @@ class EnsembleJudge(BaseJudge):
         argument_a: str,
         argument_b: str,
         round_id: int,
+        **kwargs
     ) -> Judgment:
         # Collect judgments, handling individual failures gracefully
         judgments = []
@@ -685,7 +686,7 @@ class EnsembleJudge(BaseJudge):
         
         for j in self.judges:
             try:
-                judgment = j.evaluate(topic, argument_a, argument_b, round_id)
+                judgment = j.evaluate(topic, argument_a, argument_b, round_id, **kwargs)
                 judgments.append(judgment)
             except ValueError as e:
                 # Sub-judge validation failed - skip but log
@@ -749,6 +750,7 @@ class ConsensusJudge(BaseJudge):
         argument_a: str,
         argument_b: str,
         round_id: int,
+        **kwargs
     ) -> Judgment:
         # 1. Collect individual judgments, handling failures gracefully
         judgments = []
@@ -756,7 +758,7 @@ class ConsensusJudge(BaseJudge):
         
         for j in self.judges:
             try:
-                judgment = j.evaluate(topic, argument_a, argument_b, round_id)
+                judgment = j.evaluate(topic, argument_a, argument_b, round_id, **kwargs)
                 judgments.append(judgment)
             except ValueError as e:
                 failed_judges.append(f"{j.name}: {str(e)[:100]}")

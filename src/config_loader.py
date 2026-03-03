@@ -18,6 +18,11 @@ class DebaterSpec:
     ev_guard_edge_scale: float = 0.8
     low_balance_threshold: float = 60.0
     low_balance_bet_cap: float = 10.0
+    kelly_enabled: bool = True
+    kelly_scale: float = 0.5
+    kelly_cap: float = 0.25
+    verbosity_scale_enabled: bool = True
+    verbosity_base_tokens: int = 600
 
 
 @dataclass
@@ -75,6 +80,11 @@ def load_config(path: str) -> TournamentConfig:
             ev_guard_edge_scale=d.get('ev_guard_edge_scale', 0.8),
             low_balance_threshold=d.get('low_balance_threshold', 60.0),
             low_balance_bet_cap=d.get('low_balance_bet_cap', 10.0),
+            kelly_enabled=d.get('kelly_enabled', True),
+            kelly_scale=d.get('kelly_scale', 0.5),
+            kelly_cap=d.get('kelly_cap', 0.25),
+            verbosity_scale_enabled=d.get('verbosity_scale_enabled', True),
+            verbosity_base_tokens=d.get('verbosity_base_tokens', 600),
         ))
     
     # Parse judges

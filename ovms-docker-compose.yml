@@ -1,0 +1,38 @@
+services:
+  # OpenVINO Model Server for Intel Arc GPU
+  ovms-arc:
+    image: openvino/model_server:latest
+    container_name: ovms-arc-gpu
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/models
+    devices:
+      - /dev/dri:/dev/dri # Grant access to Intel Arc GPU
+    command: >
+      --model_name qwen1.5b
+      --model_path /models/Qwen2.5-1.5B-Instruct-OV/FP16
+      --port 9000
+      --rest_port 8000
+      --target_device GPU
+      --plugin_config '{"PERFORMANCE_HINT": "LATENCY"}'
+
+  # OpenVINO Model Server for Intel AI Boost NPU
+  ovms-npu:
+    image: openvino/model_server:latest
+    container_name: ovms-npu
+    restart: always
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./models:/models
+    devices:
+      - /dev/accel/accel0:/dev/accel/accel0 # Verify exact path to NPU device on host
+    command: >
+      --model_name qwen1.5b
+      --model_path /models/Qwen2.5-1.5B-Instruct-OV/INT8
+      --port 9001
+      --rest_port 8000
+      --target_device NPU
+      --plugin_config '{"PERFORMANCE_HINT": "LATENCY"}'

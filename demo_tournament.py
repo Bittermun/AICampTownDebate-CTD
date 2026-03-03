@@ -10,6 +10,7 @@ import argparse
 from pathlib import Path
 
 import json
+import random
 from src.config_loader import load_config, get_default_config
 from src.models import Debater, DebaterConfig
 from src.models.judge import LLMJudge, JudgeConfig, EnsembleJudge, ConsensusJudge
@@ -21,7 +22,7 @@ from src.analysis.selection_health import compute_selection_health
 from src.integrations.match_registry import MatchRegistry
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description="Run a multi-round debate tournament")
     parser.add_argument(
         "--config", 
@@ -49,12 +50,34 @@ def main():
     parser.add_argument("--max-judge-stdev", type=float, default=0.05)
     parser.add_argument("--min-judge-mean-a", type=float, default=0.55)
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Deterministic seed for randomized components",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="logs",
+        help="Directory to write tournament artifacts",
+    )
+    parser.add_argument(
+        "--output-prefix",
+        type=str,
+        default="tournament_results",
+        help="Base filename prefix for tournament artifacts",
+    )
+    parser.add_argument(
         "--gate-judge-calibration",
         action="store_true",
         help="Run fixed-case calibration gate before tournament and abort on failure",
     )
     parser.add_argument("--min-calibration-pass-rate", type=float, default=0.67)
     args = parser.parse_args()
+
+    if args.seed is not None:
+        random.seed(args.seed)
+        print(f"Using seed: {args.seed}")
     
     # Load configuration
     if args.config:
@@ -84,7 +107,7 @@ def main():
         )
     except RuntimeError as e:
         print(str(e))
-        return
+        return 2
     print_preflight(preflight)
     
     # Create debaters using DebaterConfig
@@ -98,6 +121,12 @@ def main():
         ev_guard_edge_scale=cfg.debaters[0].ev_guard_edge_scale,
         low_balance_threshold=cfg.debaters[0].low_balance_threshold,
         low_balance_bet_cap=cfg.debaters[0].low_balance_bet_cap,
+        kelly_enabled=cfg.debaters[0].kelly_enabled,
+        kelly_scale=cfg.debaters[0].kelly_scale,
+        kelly_cap=cfg.debaters[0].kelly_cap,
+        verbosity_scale_enabled=cfg.debaters[0].verbosity_scale_enabled,
+        verbosity_base_tokens=cfg.debaters[0].verbosity_base_tokens,
+        initial_balance_ref=cfg.economy.initial_balance,
     ))
     debater_b = Debater(DebaterConfig(
         model_path=normalize_model_path(cfg.debaters[1].model),
@@ -109,6 +138,12 @@ def main():
         ev_guard_edge_scale=cfg.debaters[1].ev_guard_edge_scale,
         low_balance_threshold=cfg.debaters[1].low_balance_threshold,
         low_balance_bet_cap=cfg.debaters[1].low_balance_bet_cap,
+        kelly_enabled=cfg.debaters[1].kelly_enabled,
+        kelly_scale=cfg.debaters[1].kelly_scale,
+        kelly_cap=cfg.debaters[1].kelly_cap,
+        verbosity_scale_enabled=cfg.debaters[1].verbosity_scale_enabled,
+        verbosity_base_tokens=cfg.debaters[1].verbosity_base_tokens,
+        initial_balance_ref=cfg.economy.initial_balance,
     ))
     
     # Create judge(s) from config
@@ -184,7 +219,7 @@ def main():
         )
         if not gate.passed:
             print("Aborting tournament: judge variance gate failed.")
-            return
+            return 3
 
     if args.gate_judge_calibration:
         print("\nRunning judge calibration gate...")
@@ -210,7 +245,7 @@ def main():
         )
         if not cal.passed:
             print("Aborting tournament: judge calibration gate failed.")
-            return
+            return 4
     
     # Create observer
     observer = MetricsObserver()
@@ -260,38 +295,40 @@ def main():
     print(f"Ended: {result.ended_at}")
     
     # Save results
-    output_dir = Path("logs")
+    output_dir = Path(args.output_dir)
     output_dir.mkdir(exist_ok=True)
-    tournament.save_results(str(output_dir / "tournament_results.json"))
+    tournament.save_results(str(output_dir / f"{args.output_prefix}.json"))
     
     # Save observer metrics
-    observer.save(str(output_dir / "tournament_metrics.json"))
+    observer.save(str(output_dir / f"{args.output_prefix}_metrics.json"))
 
-    # ── Selection Health Dashboard ─────────────────────────────────────────────
+    # Selection Health Dashboard
     try:
-        transcript_path = output_dir / "tournament_results_transcript.json"
-        ledger_path = output_dir / "tournament_results_ledger.json"
+        transcript_path = output_dir / f"{args.output_prefix}_transcript.json"
+        ledger_path = output_dir / f"{args.output_prefix}_ledger.json"
         if transcript_path.exists():
             with open(transcript_path, encoding="utf-8") as f:
                 transcript_data = json.load(f)
             ledger_data = json.loads(ledger_path.read_text(encoding="utf-8")) if ledger_path.exists() else None
             health = compute_selection_health(transcript_data, ledger=ledger_data)
-            print(f"\n{'─'*60}")
+            health_path = output_dir / f"{args.output_prefix}_selection_health_dashboard.json"
+            health_path.write_text(json.dumps(health.to_dict(), indent=2), encoding="utf-8")
+            print(f"\n{'-'*60}")
             print("  SELECTION HEALTH DASHBOARD")
-            print(f"{'─'*60}")
+            print(f"{'-'*60}")
             print(f"  Health Score:        {health.health_score:.3f}  (0=degenerate, 1=ideal)")
             print(f"  Judge Margin Mean:   {health.judge_margin_mean:.3f}  stdev={health.judge_margin_stdev:.3f}")
-            print(f"  Adaptation (↑loss):  {health.adaptation_gain_after_loss:+.3f}  (positive = recovery)")
+            print(f"  Adaptation (+loss):  {health.adaptation_gain_after_loss:+.3f}  (positive = recovery)")
             print(f"  Economy Reasoning:   {health.economy_reasoning_rate:.1%}  (deliberation mentions tokens/budget)")
             print(f"  Pass Rate:           {health.pass_rate:.1%}  (target ~35%)")
             print(f"  Aggression Rate:     {health.aggression_rate:.1%}")
             print(f"  Avg Iterations:      {health.avg_iterations:.1f}")
             print(f"  Judge Score Entropy: {health.judge_score_entropy_bits:.2f} bits  (higher = richer signal)")
-            print(f"{'─'*60}")
+            print(f"{'-'*60}")
     except Exception as e:
         print(f"  [Health dashboard error: {e}]")
 
-    # ── Match Registry — persistent cross-session storage ─────────────────────
+    # Match Registry - persistent cross-session storage
     try:
         registry = MatchRegistry()
         config_label = getattr(args, "config", None) or f"default_{args.model}"
@@ -305,7 +342,7 @@ def main():
         print(f"  [Match registry error: {e}]")
 
     print(f"\nResults saved to {output_dir}")
-
+    return 0
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

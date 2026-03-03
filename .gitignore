@@ -41,3 +41,6 @@ config.yaml
 # Test artifacts
 logs/test_tmp_*/
 logs/ollama_results_transcript.md
+
+# Local Temporary Files
+tmp/

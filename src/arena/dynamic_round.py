@@ -176,7 +176,16 @@ class DynamicDebateRound:
         ctx.round_supply_start = sum(self.ledger.summary()["balances"].values())
         
         # Phase 1: Generate initial arguments (once)
-        ctx = self._phase_generate_arguments(ctx, transcript)
+        if self._supports_parallel_opening_generation():
+            try:
+                import asyncio
+
+                ctx = asyncio.run(self._phase_generate_arguments_async(ctx, transcript))
+            except RuntimeError:
+                # Fallback when already inside an event loop.
+                ctx = self._phase_generate_arguments(ctx, transcript)
+        else:
+            ctx = self._phase_generate_arguments(ctx, transcript)
         
         # Phase 2: Initial judgment (once)
         ctx = self._phase_initial_judgment(ctx, transcript)
@@ -238,6 +247,12 @@ class DynamicDebateRound:
                 print(f"  [Warning] Observer {observer.name} failed: {e}")
         
         return self._build_result(ctx, observation_reports)
+
+    def _supports_parallel_opening_generation(self) -> bool:
+        supported = {"ollama", "vllm", "openai_compat"}
+        backend_a = getattr(self.debater_a, "_backend", None)
+        backend_b = getattr(self.debater_b, "_backend", None)
+        return backend_a in supported and backend_b in supported
     
     # ─────────────────────────────────────────────────────────────────────────
     # Phase 1: Generate Arguments (runs once)

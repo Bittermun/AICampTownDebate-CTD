@@ -20,7 +20,7 @@ if sys.platform == 'win32':
 os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 TESTS = [
-    # Core functionality
+    # Legacy compatibility checks
     ("Attribute Compatibility", "tests/verify_fix1_attributes.py"),
     ("JSON Parsing Edge Cases", "tests/verify_fix2_parsing.py"),
     ("Position Randomization", "tests/verify_fix3_randomize.py"),
@@ -29,6 +29,25 @@ TESTS = [
     ("Validation Token Cost", "tests/verify_fix6_validation_cost.py"),
     ("Multi-Dim Model", "tests/verify_multidim_judge.py"),
     ("Judge Integration", "tests/verify_judge_integration.py"),
+
+    # Core model and prompting contracts
+    ("Response Models", "tests/test_response_models.py"),
+    ("Prompt Rule Cards", "tests/test_prompt_rule_cards.py"),
+
+    # Benchmark and provenance contracts (local, no live runtime required)
+    ("Benchmark Config Parse", "tests/test_benchmark_config_parse.py"),
+    ("Benchmark Datasets", "tests/test_benchmark_datasets.py"),
+    ("Benchmark Scoring", "tests/test_benchmark_scoring.py"),
+    ("Benchmark Score Sources", "tests/test_benchmark_score_sources.py"),
+    ("Benchmark Source Modes", "tests/test_benchmark_source_mode_overrides.py"),
+    ("Benchmark Runner HOLD Semantics", "tests/test_benchmark_runner.py"),
+    ("Benchmark Batch Utils", "tests/test_benchmark_batch_utils.py"),
+    ("Benchmark Registry", "tests/test_benchmark_registry.py"),
+    ("Evolution Campaign", "tests/test_evolution_campaign.py"),
+
+    # Economy and analysis invariants
+    ("Economy Invariants", "tests/test_econ_invariants.py"),
+    ("Selection Health HOLD Semantics", "tests/test_selection_health_hold_semantics.py"),
 ]
 
 def run_test(name: str, script: str) -> bool:
@@ -47,7 +66,7 @@ def run_test(name: str, script: str) -> bool:
             [sys.executable, script],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=90,
             env=env,
             encoding='utf-8',
             errors='replace'

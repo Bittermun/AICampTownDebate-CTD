@@ -27,6 +27,7 @@ class BatchRunRecord:
     live_source_failures: int = 0
     original_model_id: str = ""
     effective_model_id: str = ""
+    openai_base_url: Optional[str] = None
     was_replaced: bool = False
     replacement_index: int = 0
     replaced_from_run_id: Optional[str] = None
@@ -51,6 +52,7 @@ class BatchRunRecord:
             "live_source_failures": self.live_source_failures,
             "original_model_id": self.original_model_id,
             "effective_model_id": self.effective_model_id,
+            "openai_base_url": self.openai_base_url,
             "was_replaced": self.was_replaced,
             "replacement_index": self.replacement_index,
             "replaced_from_run_id": self.replaced_from_run_id,

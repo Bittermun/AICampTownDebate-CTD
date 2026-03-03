@@ -37,19 +37,19 @@ accuracy_split / responsiveness_split / development_split = points going to {fir
 {second_label} receives (100 - split) on each dimension.
 
 {{
+  "reasoning": "dimension-by-dimension explanation citing specific claims",
   "accuracy_split": 0-100,
   "responsiveness_split": 0-100,
-  "development_split": 0-100,
-  "reasoning": "dimension-by-dimension explanation citing specific claims"
+  "development_split": 0-100
 }}"""
 
 # Example of expected output (allocation format — A gets split %, B gets 100-split %):
 EXAMPLE_OUTPUT = """
 {
+  "reasoning": "A: solid evidence, directly addressed B's core claim about X, refined position. B: made unsupported claim about Y, did not respond to A's refutation, argument static.",
   "accuracy_split": 70,
   "responsiveness_split": 80,
-  "development_split": 70,
-  "reasoning": "A: solid evidence, directly addressed B's core claim about X, refined position. B: made unsupported claim about Y, did not respond to A's refutation, argument static."
+  "development_split": 70
 }
 """
 

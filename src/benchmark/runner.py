@@ -13,7 +13,14 @@ import random
 import re
 import sys
 
-from src.analysis import compute_selection_health, evaluate_judge_calibration, evaluate_judge_variance
+from src.analysis import (
+    assign_trace_quality_tier,
+    compute_selection_health,
+    evaluate_judge_calibration,
+    evaluate_judge_variance,
+    export_trace_jsonl,
+    normalize_transcript_to_traces,
+)
 from src.arena import EconomyParams, Tournament
 from src.arena.observers import MetricsObserver
 from src.config_loader import TournamentConfig, load_config
@@ -101,6 +108,7 @@ def _run_seed_gates(
 ) -> List[GateResult]:
     gates: List[GateResult] = []
     strict_runtime = policy.runtime.strict_mode_required and not allow_stub
+    print(f"[gate][seed={seed}] loading judge model for gate checks...")
     judge = LLMJudge(
         JudgeConfig(
             model_path=judge_model_path,
@@ -112,6 +120,10 @@ def _run_seed_gates(
     judge.load_model()
     try:
         if policy.runtime.judge_gates.variance.enabled:
+            print(
+                f"[gate][seed={seed}] running variance gate "
+                f"(runs={policy.runtime.judge_gates.variance.runs})..."
+            )
             var = evaluate_judge_variance(
                 judge=judge,
                 topic="Should cities subsidize public transit?",
@@ -133,8 +145,16 @@ def _run_seed_gates(
                     },
                 )
             )
+            print(
+                f"[gate][seed={seed}] variance gate "
+                f"passed={var.passed} mean_a={var.mean_confidence_a:.3f} stdev={var.stdev_confidence_a:.3f}"
+            )
 
         if policy.runtime.judge_gates.calibration.enabled:
+            print(
+                f"[gate][seed={seed}] running calibration gate "
+                f"(min_pass_rate={policy.runtime.judge_gates.calibration.min_pass_rate:.2f})..."
+            )
             cal = evaluate_judge_calibration(
                 judge=judge,
                 pass_threshold=policy.runtime.judge_gates.calibration.min_pass_rate,
@@ -151,9 +171,19 @@ def _run_seed_gates(
                     },
                 )
             )
+            print(
+                f"[gate][seed={seed}] calibration gate "
+                f"passed={cal.passed} pass_rate={cal.pass_rate:.3f}"
+            )
     finally:
         judge.unload_model()
+        print(f"[gate][seed={seed}] gate checks complete.")
     return gates
+
+
+def _gate_pass_map(gates: List[GateResult]) -> Dict[str, bool]:
+    """Return gate pass flags keyed by gate name."""
+    return {g.name: bool(g.passed) for g in gates}
 
 
 def _evaluate_group(
@@ -346,6 +376,12 @@ def _build_seed_tournament(
             ev_guard_edge_scale=tc.debaters[0].ev_guard_edge_scale,
             low_balance_threshold=tc.debaters[0].low_balance_threshold,
             low_balance_bet_cap=tc.debaters[0].low_balance_bet_cap,
+            kelly_enabled=tc.debaters[0].kelly_enabled,
+            kelly_scale=tc.debaters[0].kelly_scale,
+            kelly_cap=tc.debaters[0].kelly_cap,
+            verbosity_scale_enabled=tc.debaters[0].verbosity_scale_enabled,
+            verbosity_base_tokens=tc.debaters[0].verbosity_base_tokens,
+            initial_balance_ref=tc.economy.initial_balance,
             strict_runtime=strict_runtime,
         )
     )
@@ -359,6 +395,12 @@ def _build_seed_tournament(
             ev_guard_edge_scale=tc.debaters[1].ev_guard_edge_scale,
             low_balance_threshold=tc.debaters[1].low_balance_threshold,
             low_balance_bet_cap=tc.debaters[1].low_balance_bet_cap,
+            kelly_enabled=tc.debaters[1].kelly_enabled,
+            kelly_scale=tc.debaters[1].kelly_scale,
+            kelly_cap=tc.debaters[1].kelly_cap,
+            verbosity_scale_enabled=tc.debaters[1].verbosity_scale_enabled,
+            verbosity_base_tokens=tc.debaters[1].verbosity_base_tokens,
+            initial_balance_ref=tc.economy.initial_balance,
             strict_runtime=strict_runtime,
         )
     )
@@ -780,6 +822,12 @@ def run_phase1(
                     "artifact_root": artifact_root_path,
                     "enable_model_derived_metrics": enable_model_derived_metrics,
                 },
+                "trace_summary": {
+                    "seed_trace_counts": [],
+                    "total_trace_count": 0,
+                    "mean_trace_count": 0.0,
+                    "quality_tier_counts": {},
+                },
             },
         )
 
@@ -805,6 +853,8 @@ def run_phase1(
     trajectory_records: List[Dict] = []
     accounting_drifts: List[float] = []
     live_source_failures: List[Dict] = []
+    trace_counts: List[int] = []
+    trace_tier_counts: Dict[str, int] = {}
 
     for seed in seeds:
         gates = _run_seed_gates(policy=policy, judge_model_path=judge_model_path, seed=seed, allow_stub=allow_stub)
@@ -819,6 +869,30 @@ def run_phase1(
             strict_runtime=strict_runtime,
             artifact_root=artifact_root_path,
         )
+        gate_flags = _gate_pass_map(gates)
+        trace_quality_tier = assign_trace_quality_tier(
+            run_metadata={"runtime_fingerprint": {"strict_runtime": strict_runtime}},
+            gate_summary={
+                "judge_variance_pass": gate_flags.get("judge_variance", False),
+                "judge_calibration_pass": gate_flags.get("judge_calibration", False),
+                "gates_pass": gates_pass,
+            },
+        )
+        transcript_payload = json.loads(Path(artifact_paths["transcript_json"]).read_text(encoding="utf-8"))
+        ledger_payload = json.loads(Path(artifact_paths["ledger_json"]).read_text(encoding="utf-8"))
+        traces = normalize_transcript_to_traces(
+            transcript=transcript_payload,
+            ledger=ledger_payload,
+            run_id=run_id,
+            seed=seed,
+            judge_model=judge_model_configured,
+            judge_reliability_tier=trace_quality_tier,
+        )
+        trace_path = str(Path(artifact_paths["transcript_json"]).with_name("trace_records.jsonl"))
+        export_trace_jsonl(traces, trace_path)
+        artifact_paths["trace_jsonl"] = trace_path
+        trace_counts.append(len(traces))
+        trace_tier_counts[trace_quality_tier] = trace_tier_counts.get(trace_quality_tier, 0) + 1
         group_metric_overrides: Dict[str, Dict[str, float]] = {}
         group_metric_overrides = _build_group_metric_overrides_from_artifacts(
             health=health,
@@ -881,6 +955,9 @@ def run_phase1(
             path = artifact_paths.get(key)
             if not path or not Path(path).exists():
                 seed_validity_issues.append(f"Missing required artifact: {key}")
+        trace_path = artifact_paths.get("trace_jsonl")
+        if not trace_path or not Path(trace_path).exists():
+            seed_validity_issues.append("Missing required artifact: trace_jsonl")
 
         drift, accounting_ok, accounting_notes = _compute_accounting_drift(artifact_paths["ledger_json"])
         accounting_drifts.append(drift)
@@ -895,6 +972,8 @@ def run_phase1(
             health=health,
             policy=policy,
         )
+        trajectory["trace_count"] = len(traces)
+        trajectory["trace_quality_tier"] = trace_quality_tier
         trajectory_records.append(trajectory)
         seed_validity_issues.extend(trajectory_issues)
 
@@ -1061,6 +1140,12 @@ def run_phase1(
                 "enable_model_derived_metrics": enable_model_derived_metrics,
             },
             "score_provenance": score_provenance,
+            "trace_summary": {
+                "seed_trace_counts": trace_counts,
+                "total_trace_count": int(sum(trace_counts)),
+                "mean_trace_count": round(float(mean(trace_counts)), 3) if trace_counts else 0.0,
+                "quality_tier_counts": trace_tier_counts,
+            },
             "artifact_manifest": {
                 **_build_artifact_manifest(
                     {

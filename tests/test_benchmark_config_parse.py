@@ -7,6 +7,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.benchmark.config_models import load_benchmark_policy
+from src.config_loader import load_config
 
 
 def test_load_valid_policy():
@@ -25,6 +26,16 @@ def test_non_blocking_group_parse():
     policy = load_benchmark_policy("configs/benchmark_phase1.yaml")
     assert policy.benchmark_groups["truth_core_core"].blocking is True
     assert policy.benchmark_groups["truth_core_stretch"].blocking is False
+
+
+def test_tournament_config_debater_knob_defaults():
+    cfg = load_config("configs/ollama_tournament_recommended.yaml")
+    d0 = cfg.debaters[0]
+    assert d0.kelly_enabled is True
+    assert d0.kelly_scale == 0.5
+    assert d0.kelly_cap == 0.25
+    assert d0.verbosity_scale_enabled is True
+    assert d0.verbosity_base_tokens == 600
 
 
 def test_missing_required_field_raises():
@@ -46,5 +57,6 @@ runtime:
 if __name__ == "__main__":
     test_load_valid_policy()
     test_non_blocking_group_parse()
+    test_tournament_config_debater_knob_defaults()
     test_missing_required_field_raises()
     print("test_benchmark_config_parse: PASS")

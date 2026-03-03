@@ -6,7 +6,9 @@
 - Optional backend service(s):
   - Ollama server for `ollama:` models
   - vLLM server for `vllm:` models
+  - Any OpenAI-compatible endpoint for `openai:` models
 - vLLM endpoint can be configured with `VLLM_BASE_URL` and optional `VLLM_API_KEY`
+- OpenAI-compatible endpoint can be configured with `OPENAI_COMPAT_BASE_URL` and optional `OPENAI_COMPAT_API_KEY`
 - Python deps from `requirements.txt`
 
 ## Setup
@@ -25,6 +27,7 @@ ollama pull qwen2.5:1.5b
 ```
 
 3. Configure `configs/tournament_config.yaml`.
+4. If using `openai:` models, set endpoint environment variables and use a matching config (for example `configs/openai_compat_tournament_recommended.yaml`).
 
 ## Safety Modes
 
@@ -74,6 +77,12 @@ One-command vLLM pipeline (start server, wait, gate, tournament, logs):
 powershell -ExecutionPolicy Bypass -File scripts/run_vllm_research.ps1
 ```
 
+OpenAI-compatible benchmark pipeline (PowerShell):
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/run_phase1_openai_compat.ps1
+```
+
 This command now also writes a compact summary JSON:
 - `logs/vllm_research_summary_<timestamp>.json`
 - `logs/selection_health_dashboard_<timestamp>.json`
@@ -108,6 +117,32 @@ python tests/reproduce_baseline_vs_economy.py --config configs/tournament_config
 ```bash
 python tests/derive_economy_params.py --survival-rounds 6 --avg-generation-cost 30 --avg-bet-size 20
 ```
+
+## Phase 1 Benchmark Procedure
+
+Single strict benchmark run:
+
+```bash
+python tests/run_phase1_benchmark.py --config configs/benchmark_phase1.yaml --tournament-config configs/ollama_tournament_recommended.yaml --model-id ollama:qwen2.5:7b --judge-model ollama:qwen2.5:7b --seeds 101
+```
+
+Batch benchmark run:
+
+```bash
+python scripts/run_phase1_batch.py --config configs/benchmark_phase1.yaml --tournament-config configs/ollama_tournament_recommended.yaml --model-id ollama:qwen2.5:7b --judge-model ollama:qwen2.5:7b --seeds 101,202,303 --matrix-labels set01
+```
+
+Massive tournament dataset run (per-run archives + trace JSONL):
+
+```bash
+python scripts/run_tournament_batch.py --config configs/ollama_tournament_50r_dataset.yaml --runs 50 --start-seed 101 --variance-runs 10 --min-calibration-pass-rate 0.67
+```
+
+Useful flags:
+- `--source-mode`: `default | core_live_stretch_fixture | all_live | all_fixture`
+- `--enable-model-derived-metrics` (on `tests/run_phase1_benchmark.py`)
+- `--openai-base-urls`: endpoint roster for `openai:*` models (round-robin assignment across jobs)
+- `--allow-stub` only for plumbing checks, never for claim-bearing evidence
 
 ## Output Artifacts
 

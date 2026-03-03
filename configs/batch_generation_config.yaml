@@ -1,0 +1,29 @@
+# High-Quality Data Generation Config
+# Hardware Context: 8GB VRAM (Qwen 1.5B debaters, Qwen 7B judge)
+models:
+  judge_type: ensemble
+  randomize_argument_order: true
+  debaters:
+    - name: "Alpha-1.5B"
+      model: "qwen2.5:1.5b"
+    - name: "Beta-1.5B"
+      model: "qwen2.5:1.5b"
+  judges:
+    - model: "qwen2.5:7b"
+
+economy:
+  initial_balance: 100
+  max_debt: 20
+  tokens_per_round: 0
+  split_pot_enabled: true
+  initial_pot_amount: 30
+
+rounds:
+  num_rounds: 3
+  max_iterations: 10
+  topics:
+    - "Is zero-sum thinking harmful in business?"
+    - "Should remote work be permanently adopted for all knowledge workers?"
+    - "Does open source software guarantee better security?"
+    - "Should standardized testing be abolished?"
+    - "Is artificial intelligence an existential threat to humanity?"
