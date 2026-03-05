@@ -28,6 +28,7 @@ def _sample_traces() -> list[dict]:
             "reasoning": "press contradiction",
             "intent": "challenge",
             "balance": 100.0,
+            "tokens_bet": 8.0,
             "confidence_self": 0.6,
             "confidence_opponent": 0.4,
             "outcome_delta": 8.0,
@@ -43,6 +44,7 @@ def _sample_traces() -> list[dict]:
             "reasoning": "wait",
             "intent": "revise",
             "balance": 95.0,
+            "tokens_bet": 0.0,
             "confidence_self": 0.4,
             "confidence_opponent": 0.6,
             "outcome_delta": 1.0,
@@ -62,11 +64,50 @@ def test_build_sft_examples_from_traces() -> None:
     assert response_payload["decision"] == "RESPOND"
 
 
-def test_build_preference_pairs_prefers_higher_outcome_delta() -> None:
+def test_build_preference_pairs_prefers_higher_signed_ev_proxy() -> None:
     pairs = build_preference_pairs_from_rounds(summary={}, traces=_sample_traces())
     assert len(pairs) == 1
     assert json.loads(pairs[0].chosen)["decision"] == "RESPOND"
     assert json.loads(pairs[0].rejected)["decision"] == "HOLD"
+    assert pairs[0].metadata["chosen_ev_proxy"] > pairs[0].metadata["rejected_ev_proxy"]
+
+
+def test_build_preference_pairs_penalizes_negative_edge_bets() -> None:
+    traces = [
+        {
+            "trace_id": "r2t1",
+            "round_id": 2,
+            "iteration": 1,
+            "speaker": "Debater_A",
+            "decision": "RESPOND",
+            "reasoning": "forced response despite weak edge",
+            "intent": "challenge",
+            "tokens_bet": 12.0,
+            "confidence_self": 0.42,
+            "confidence_opponent": 0.58,
+            "judge_reliability_tier": "tier_a",
+            "provenance_source": "raw_transcript",
+        },
+        {
+            "trace_id": "r2t2",
+            "round_id": 2,
+            "iteration": 1,
+            "speaker": "Debater_B",
+            "decision": "HOLD",
+            "reasoning": "preserve capital",
+            "intent": "revise",
+            "tokens_bet": 0.0,
+            "confidence_self": 0.58,
+            "confidence_opponent": 0.42,
+            "judge_reliability_tier": "tier_a",
+            "provenance_source": "raw_transcript",
+        },
+    ]
+    pairs = build_preference_pairs_from_rounds(summary={}, traces=traces)
+    assert len(pairs) == 1
+    assert json.loads(pairs[0].chosen)["decision"] == "HOLD"
+    assert json.loads(pairs[0].rejected)["decision"] == "RESPOND"
+    assert pairs[0].metadata["chosen_ev_proxy"] > pairs[0].metadata["rejected_ev_proxy"]
 
 
 def test_manifest_and_checkpoint_registry_roundtrip() -> None:
@@ -119,7 +160,8 @@ def test_noop_trainer_run() -> None:
 
 if __name__ == "__main__":
     test_build_sft_examples_from_traces()
-    test_build_preference_pairs_prefers_higher_outcome_delta()
+    test_build_preference_pairs_prefers_higher_signed_ev_proxy()
+    test_build_preference_pairs_penalizes_negative_edge_bets()
     test_manifest_and_checkpoint_registry_roundtrip()
     test_noop_trainer_run()
     print("test_training_contracts: PASS")

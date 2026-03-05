@@ -4,10 +4,22 @@ from pathlib import Path
 import json
 import sys
 
+import pytest
+
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.benchmark.batch_utils import BatchRunRecord, detect_bankruptcy_from_summary, should_retry_bankruptcy, summarize_batch
+from src.benchmark.batch_utils import (
+    BatchRunRecord,
+    append_jsonl,
+    decode_checkpoint_row,
+    detect_bankruptcy_from_summary,
+    encode_checkpoint_row,
+    load_checkpoint_jsonl,
+    persist_jsonl,
+    should_retry_bankruptcy,
+    summarize_batch,
+)
 
 
 def test_detect_bankruptcy_from_summary():
@@ -138,10 +150,81 @@ def test_batch_record_serializes_openai_endpoint():
     assert payload["openai_base_url"] == "http://arc:8000"
 
 
+def test_checkpoint_envelope_decode_supports_legacy_rows() -> None:
+    schema = "benchmark.test.batch_summary"
+    legacy_row = {"run_no": 1, "success": True}
+    wrapped_row = encode_checkpoint_row({"run_no": 2, "success": False}, schema_name=schema)
+
+    legacy_decoded, legacy_version = decode_checkpoint_row(legacy_row, schema_name=schema)
+    wrapped_decoded, wrapped_version = decode_checkpoint_row(wrapped_row, schema_name=schema)
+
+    assert legacy_decoded == legacy_row
+    assert legacy_version == 0
+    assert wrapped_decoded == {"run_no": 2, "success": False}
+    assert wrapped_version == 1
+
+
+def test_load_checkpoint_jsonl_migrates_legacy_and_skips_invalid(tmp_path: Path) -> None:
+    schema = "benchmark.test.batch_summary"
+    path = tmp_path / "batch_summary.jsonl"
+    path.write_text(
+        "\n".join(
+            [
+                json.dumps({"run_no": 1, "success": True}),
+                json.dumps(encode_checkpoint_row({"run_no": 2, "success": False}, schema_name=schema)),
+                "{broken json",
+                json.dumps({"__schema__": schema, "__version__": 999, "record": {"run_no": 3}}),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    rows, stats = load_checkpoint_jsonl(str(path), schema_name=schema)
+    assert rows == [{"run_no": 1, "success": True}, {"run_no": 2, "success": False}]
+    assert stats["rows_legacy"] == 1
+    assert stats["rows_enveloped"] == 1
+    assert stats["rows_malformed"] == 1
+    assert stats["rows_invalid"] == 1
+
+
+def test_persist_jsonl_uses_atomic_replace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    schema = "benchmark.test.batch_summary"
+    path = tmp_path / "batch_summary.jsonl"
+    path.write_text("stale\n", encoding="utf-8")
+
+    calls: list[tuple[Path, Path]] = []
+    original_replace = Path.replace
+
+    def _spy_replace(self: Path, target: Path) -> Path:
+        calls.append((self, target))
+        return original_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", _spy_replace)
+    persist_jsonl(str(path), [{"run_no": 1, "success": True}], schema_name=schema)
+
+    assert calls, "persist_jsonl should atomically swap temp -> target via Path.replace"
+    rows, stats = load_checkpoint_jsonl(str(path), schema_name=schema)
+    assert rows == [{"run_no": 1, "success": True}]
+    assert stats["rows_invalid"] == 0
+    assert not [p for p in tmp_path.iterdir() if p.name.endswith(".tmp")]
+
+
+def test_append_jsonl_writes_enveloped_rows(tmp_path: Path) -> None:
+    schema = "benchmark.test.batch_summary"
+    path = tmp_path / "batch_summary.jsonl"
+    append_jsonl(str(path), {"run_no": 1, "success": True}, schema_name=schema)
+    append_jsonl(str(path), {"run_no": 2, "success": False}, schema_name=schema)
+
+    rows, stats = load_checkpoint_jsonl(str(path), schema_name=schema)
+    assert rows == [{"run_no": 1, "success": True}, {"run_no": 2, "success": False}]
+    assert stats["rows_enveloped"] == 2
+
+
 if __name__ == "__main__":
     test_detect_bankruptcy_from_summary()
     test_retry_policy()
     test_summarize_batch()
     test_summarize_batch_replacement_metrics()
     test_batch_record_serializes_openai_endpoint()
+    test_checkpoint_envelope_decode_supports_legacy_rows()
     print("test_benchmark_batch_utils: PASS")

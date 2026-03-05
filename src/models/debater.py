@@ -56,6 +56,10 @@ class DebaterConfig:
     verbosity_scale_enabled: bool = True  # Scale max_tokens with balance ratio
     verbosity_base_tokens: int = 600      # Baseline max tokens for generation
     initial_balance_ref: float = 200.0    # Reference balance (set to actual initial_balance at init)
+    multi_agent_enabled: bool = False     # Experimental: enable peer-draft injection
+    multi_agent_mode: str = "none"       # none | critique | synthesize
+    multi_agent_max_tokens: int = 140
+    multi_agent_min_balance: float = 80.0
 
 
 @dataclass
@@ -220,6 +224,53 @@ class Debater:
             return await self._openai.generate_async(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
         else:
             return self._generate(prompt, system, max_tokens, json_mode, temperature)
+
+    def _build_peer_draft(
+        self,
+        topic: str,
+        opponent_argument: str,
+        own_history: Optional[str],
+        current_balance: Optional[float],
+        confidence_self: Optional[float],
+        confidence_opponent: Optional[float],
+    ) -> tuple[str, int]:
+        """Experimental helper: generate a compact peer draft for injection mode."""
+        if not self.config.multi_agent_enabled:
+            return "", 0
+        mode = (self.config.multi_agent_mode or "none").strip().lower()
+        if mode not in {"critique", "synthesize"}:
+            return "", 0
+        if current_balance is not None and current_balance < self.config.multi_agent_min_balance:
+            return "", 0
+
+        standing = ""
+        if confidence_self is not None and confidence_opponent is not None:
+            standing = f"\nStanding now: you={confidence_self:.0%}, other={confidence_opponent:.0%}."
+        own_snippet = own_history[-300:] if own_history else "[none]"
+        prompt = (
+            f"Topic: {topic}\n\n"
+            f"Opponent statement:\n{opponent_argument[:700]}\n\n"
+            f"Your prior statement:\n{own_snippet}\n"
+            f"{standing}\n\n"
+            "Write a compact peer draft (<=120 words) aimed to maximize expected score shift this iteration."
+        )
+        system = (
+            "You are a peer strategist in a debate economy. Keep output concrete, specific, and concise."
+        )
+        try:
+            res = self._generate(
+                prompt=prompt,
+                system=system,
+                max_tokens=max(64, int(self.config.multi_agent_max_tokens)),
+                json_mode=False,
+                temperature=0.4,
+            )
+        except Exception:
+            return "", 0
+        draft = (res.text or "").strip()
+        if len(draft) > 700:
+            draft = draft[:700].rstrip() + "..."
+        return draft, int(res.tokens_used or 0)
     
     def generate_argument(
         self,
@@ -233,6 +284,8 @@ class Debater:
         confidence_opponent: Optional[float] = None,
         strategy_context: Optional[str] = None,
         max_budget_tokens: Optional[int] = None,
+        injection_mode: Optional[str] = None,
+        injected_draft: Optional[str] = None,
     ) -> Argument:
         """
         Generate an argument on the given topic.
@@ -243,6 +296,26 @@ class Debater:
         If confidence scores are provided, model sees current standing.
         """
         is_counter = opponent_argument is not None
+        peer_tokens_used = 0
+
+        # Auto-enable injection from experimental multi-agent knobs when not explicitly supplied.
+        if (
+            is_counter
+            and not injection_mode
+            and not injected_draft
+            and self.config.multi_agent_enabled
+        ):
+            mode = (self.config.multi_agent_mode or "none").strip().lower()
+            if mode in {"critique", "synthesize"}:
+                injected_draft, peer_tokens_used = self._build_peer_draft(
+                    topic=topic,
+                    opponent_argument=opponent_argument or "",
+                    own_history=own_history,
+                    current_balance=current_balance,
+                    confidence_self=confidence_self,
+                    confidence_opponent=confidence_opponent,
+                )
+                injection_mode = mode
         
         # Build tournament-aware system prompt (facts only, no strategy guidance)
         base_prompt = self.config.system_prompt or ""
@@ -286,6 +359,13 @@ class Debater:
         if strategy_context:
             parts.append(f"Your strategic plan for this response:\n{strategy_context}")
             
+        if injection_mode == "critique" and injected_draft:
+            parts.append(f"A peer AI has provided a relevant draft response for this debate:\n{injected_draft}\n\n"
+                         f"INJECTION TASK (CRITIQUE): Identify the single strongest flaw in the peer's draft and construct your own argument to be immune to it.")
+        elif injection_mode == "synthesize" and injected_draft:
+            parts.append(f"A peer AI has provided a relevant draft response for this debate:\n{injected_draft}\n\n"
+                         f"INJECTION TASK (SYNTHESIZE): Integrate the best supported claim from the peer's draft into your own argument to make it stronger.")
+            
         parts.append(f"{thinking_instruction}\n\nYour response:")
         
         prompt = "\n\n".join(parts)
@@ -303,7 +383,7 @@ class Debater:
         # Generate based on backend
         result = self._generate(prompt, system=system, max_tokens=effective_max)
         response_text = result.text
-        llm_tokens_used = result.tokens_used
+        llm_tokens_used = result.tokens_used + peer_tokens_used
         
         # Extract thinking (if present) before returning
         import re
@@ -313,6 +393,10 @@ class Debater:
             thinking = thinking_match.group(1).strip()
             # Remove thinking from visible content
             response_text = re.sub(r'<thinking>.*?</thinking>', '', response_text, flags=re.DOTALL).strip()
+
+        if injected_draft and injection_mode in {"critique", "synthesize"}:
+            prefix = f"[INJECTION_{injection_mode.upper()}] {injected_draft[:200]}"
+            thinking = f"{prefix}\n{thinking}".strip() if thinking else prefix
         
         return Argument(
             content=response_text,
@@ -559,6 +643,8 @@ THINK FIRST in <thinking> tags. Reason about your ECONOMIC situation:
 - Is expected value positive after fee and generation cost?
 - What is the minimum effective response?
 - Is search worth paying for in this spot? (use_search=true has extra token cost)
+- How confident are you in winning the overall debate?
+- Given your max_bet limit ({max_bet:.0f}), what specific integer amount of tokens will you wager to back your argument? (0 is safe but yields no reward, {max_bet:.0f} is aggressive).
 
 Then respond JSON:
 {{
@@ -574,6 +660,7 @@ Then respond JSON:
   "use_search": true|false
 }}
 
+amount = integer from 0 to {max_bet:.0f}. This is your token wager. Higher wager = higher potential payout but greater bankruptcy risk.
 max_budget = maximum tokens you authorize spending on your response. Lower = cheaper but shorter.
 use_search = whether to pay for a web search to support your argument (costs extra tokens).{rules_block}"""
 

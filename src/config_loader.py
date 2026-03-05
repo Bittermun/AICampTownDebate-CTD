@@ -23,6 +23,10 @@ class DebaterSpec:
     kelly_cap: float = 0.25
     verbosity_scale_enabled: bool = True
     verbosity_base_tokens: int = 600
+    multi_agent_enabled: bool = False
+    multi_agent_mode: str = "none"
+    multi_agent_max_tokens: int = 160
+    multi_agent_min_balance: float = 80.0
 
 
 @dataclass
@@ -61,6 +65,7 @@ class TournamentConfig:
     judge_type: str = "single"  # "single", "ensemble", or "consensus"
     instructor_model: Optional[str] = None  # For consensus judge
     randomize_argument_order: bool = False  # Mitigate positional bias in judge
+    regime_randomization: bool = False  # Randomly mutate config per seed
 
 
 def load_config(path: str) -> TournamentConfig:
@@ -85,6 +90,10 @@ def load_config(path: str) -> TournamentConfig:
             kelly_cap=d.get('kelly_cap', 0.25),
             verbosity_scale_enabled=d.get('verbosity_scale_enabled', True),
             verbosity_base_tokens=d.get('verbosity_base_tokens', 600),
+            multi_agent_enabled=d.get('multi_agent_enabled', False),
+            multi_agent_mode=d.get('multi_agent_mode', 'none'),
+            multi_agent_max_tokens=d.get('multi_agent_max_tokens', 160),
+            multi_agent_min_balance=d.get('multi_agent_min_balance', 80.0),
         ))
     
     # Parse judges
@@ -126,7 +135,8 @@ def load_config(path: str) -> TournamentConfig:
     judge_type = models_data.get('judge_type', 'single')
     instructor_model = models_data.get('instructor_model')
     randomize_argument_order = models_data.get('randomize_argument_order', False)
-    
+    regime_randomization = data.get('regime_randomization', False)
+
     return TournamentConfig(
         debaters=debaters,
         judges=judges,
@@ -135,6 +145,7 @@ def load_config(path: str) -> TournamentConfig:
         judge_type=judge_type,
         instructor_model=instructor_model,
         randomize_argument_order=randomize_argument_order,
+        regime_randomization=regime_randomization,
     )
 
 

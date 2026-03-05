@@ -69,18 +69,32 @@ def assign_trace_quality_tier(run_metadata: Dict[str, Any], gate_summary: Dict[s
     Assign trace trust tier from run metadata and gate outcomes.
 
     Tiers:
-    - tier_a: judge variance and calibration pass
-    - tier_b: run valid but judge reliability partially unknown
-    - tier_c: judge reliability failed/unknown
+    - tier_a: judge variance and calibration both explicitly pass
+    - tier_b: no explicit judge failure, but reliability is partial/unknown
+    - tier_c: explicit judge reliability failure or failed run
     """
-    judge_variance_pass = bool(gate_summary.get("judge_variance_pass", False))
-    judge_calibration_pass = bool(gate_summary.get("judge_calibration_pass", False))
-    if judge_variance_pass and judge_calibration_pass:
+    _ = run_metadata  # Reserved for future policy-driven tier controls.
+
+    def _as_optional_bool(value: Any) -> Optional[bool]:
+        if isinstance(value, bool):
+            return value
+        return None
+
+    judge_variance_pass = _as_optional_bool(gate_summary.get("judge_variance_pass"))
+    judge_calibration_pass = _as_optional_bool(gate_summary.get("judge_calibration_pass"))
+
+    # Explicit failure always downgrades to tier_c.
+    if judge_variance_pass is False or judge_calibration_pass is False:
+        return "tier_c"
+
+    # High-trust traces require both reliability gates to explicitly pass.
+    if judge_variance_pass is True and judge_calibration_pass is True:
         return "tier_a"
 
+    # Otherwise, unresolved/disabled reliability gates can still produce
+    # tier_b traces if the run itself passed.
     gates_pass = bool(gate_summary.get("gates_pass", False))
-    strict_runtime = bool(run_metadata.get("runtime_fingerprint", {}).get("strict_runtime", False))
-    if gates_pass or strict_runtime:
+    if gates_pass:
         return "tier_b"
     return "tier_c"
 
@@ -202,4 +216,3 @@ def export_trace_jsonl(traces: List[TraceRecord], path: str) -> None:
     if payload:
         payload += "\n"
     out_path.write_text(payload, encoding="utf-8")
-

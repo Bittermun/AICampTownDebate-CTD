@@ -27,6 +27,10 @@ class DynamicRoundContext:
     max_iterations: int = 10
     ledger: Optional[TokenLedger] = None
     
+    # Injection parameters
+    injection_mode: Optional[str] = None
+    injected_draft: Optional[str] = None
+    
     # Current iteration
     iteration: int = 0
     
@@ -139,6 +143,8 @@ class DynamicDebateRound:
         observers: Optional[List] = None,  # List of Observer protocol objects
         split_pot_enabled: bool = False,   # Pay initial bounty after first judgment
         initial_pot_amount: float = 40.0,  # Amount to distribute as initial bounty
+        injection_mode: Optional[str] = None,
+        injected_draft: Optional[str] = None,
     ):
         self.debater_a = debater_a
         self.debater_b = debater_b
@@ -150,6 +156,8 @@ class DynamicDebateRound:
         self.observers = observers or []
         self.split_pot_enabled = split_pot_enabled
         self.initial_pot_amount = initial_pot_amount
+        self.injection_mode = injection_mode
+        self.injected_draft = injected_draft
 
     
     def run(
@@ -168,6 +176,8 @@ class DynamicDebateRound:
             token_cost_ratio=token_cost_ratio,
             max_iterations=self.max_iterations,
             ledger=self.ledger,
+            injection_mode=self.injection_mode,
+            injected_draft=self.injected_draft,
         )
         
         # Capture initial balances for metrics
@@ -685,6 +695,8 @@ class DynamicDebateRound:
                 confidence_opponent=conf_opponent,
                 strategy_context=decision.reasoning,
                 max_budget_tokens=budget_llm_tokens,
+                injection_mode=ctx.injection_mode,
+                injected_draft=ctx.injected_draft,
             )
             response.used_search = decision.use_search
             

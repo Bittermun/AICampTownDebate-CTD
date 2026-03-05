@@ -91,7 +91,7 @@ def test_assign_trace_quality_tier() -> None:
     )
     tier_b = assign_trace_quality_tier(
         run_metadata={"runtime_fingerprint": {"strict_runtime": True}},
-        gate_summary={"judge_variance_pass": False, "judge_calibration_pass": False, "gates_pass": True},
+        gate_summary={"judge_variance_pass": True, "judge_calibration_pass": None, "gates_pass": True},
     )
     tier_c = assign_trace_quality_tier(
         run_metadata={"runtime_fingerprint": {"strict_runtime": False}},

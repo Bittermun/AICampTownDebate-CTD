@@ -14,6 +14,8 @@ This file is a fast orientation for contributors joining after Sessions 23-24 (2
    - Current economics assumptions, formulas, and calibration workflow.
 5. `docs/PROCEDURES.md`
    - Reproducible strict-run process and artifact expectations.
+6. `docs/MULTI_AGENT_EXECUTION_PROTOCOL_20260305.md`
+   - Current 3-agent ownership, merge order, sprint gates, and collision rules.
 
 ## Current Architecture State
 

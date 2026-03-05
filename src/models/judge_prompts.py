@@ -38,20 +38,18 @@ accuracy_split / responsiveness_split / development_split = points going to {fir
 
 {{
   "reasoning": "dimension-by-dimension explanation citing specific claims",
-  "accuracy_split": 0-100,
-  "responsiveness_split": 0-100,
-  "development_split": 0-100
-}}"""
-
-# Example of expected output (allocation format — A gets split %, B gets 100-split %):
-EXAMPLE_OUTPUT = """
-{
-  "reasoning": "A: solid evidence, directly addressed B's core claim about X, refined position. B: made unsupported claim about Y, did not respond to A's refutation, argument static.",
   "accuracy_split": 70,
-  "responsiveness_split": 80,
-  "development_split": 70
-}
-"""
+  "responsiveness_split": 55,
+  "development_split": 60
+}}
+
+Example if Debater B is much stronger on accuracy (so A gets a low split, meaning B gets a high split):
+{{
+  "reasoning": "Debater B provided correct figures while Debater A relied on outdated studies...",
+  "accuracy_split": 20,
+  "responsiveness_split": 40,
+  "development_split": 30
+}}"""
 
 # Injected into MULTI_DIMENSION_PROMPT as {prior_context} when prior round data is available.
 # Enables the judge to detect and penalize stagnation across debate iterations.

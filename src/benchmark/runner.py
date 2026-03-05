@@ -27,6 +27,7 @@ from src.config_loader import TournamentConfig, load_config
 from src.models import Debater, DebaterConfig
 from src.models.judge import JudgeConfig, LLMJudge
 from src.runtime import normalize_model_path, run_preflight
+from scripts.reconcile_settlement import reconcile as reconcile_settlement
 
 from .config_models import BenchmarkPolicy, GroupPolicy
 from .datasets import HFDatasetAdapter, OfflineFixtureAdapter
@@ -382,6 +383,10 @@ def _build_seed_tournament(
             verbosity_scale_enabled=tc.debaters[0].verbosity_scale_enabled,
             verbosity_base_tokens=tc.debaters[0].verbosity_base_tokens,
             initial_balance_ref=tc.economy.initial_balance,
+            multi_agent_enabled=tc.debaters[0].multi_agent_enabled,
+            multi_agent_mode=tc.debaters[0].multi_agent_mode,
+            multi_agent_max_tokens=tc.debaters[0].multi_agent_max_tokens,
+            multi_agent_min_balance=tc.debaters[0].multi_agent_min_balance,
             strict_runtime=strict_runtime,
         )
     )
@@ -401,6 +406,10 @@ def _build_seed_tournament(
             verbosity_scale_enabled=tc.debaters[1].verbosity_scale_enabled,
             verbosity_base_tokens=tc.debaters[1].verbosity_base_tokens,
             initial_balance_ref=tc.economy.initial_balance,
+            multi_agent_enabled=tc.debaters[1].multi_agent_enabled,
+            multi_agent_mode=tc.debaters[1].multi_agent_mode,
+            multi_agent_max_tokens=tc.debaters[1].multi_agent_max_tokens,
+            multi_agent_min_balance=tc.debaters[1].multi_agent_min_balance,
             strict_runtime=strict_runtime,
         )
     )
@@ -696,6 +705,55 @@ def _summarize_counterfactual_scoring(
     }
 
 
+def _derive_claim_posture(
+    *,
+    final_pass: bool,
+    allow_stub: bool,
+    strict_runtime: bool,
+    dry_run: bool,
+    source_mode: SourceMode,
+    degraded_mode: bool,
+    settlement_reconciled: bool,
+    score_provenance: Dict[str, Any],
+    seed_count: int,
+) -> Tuple[str, bool, List[str]]:
+    blockers: List[str] = []
+    min_quality_claim_seeds = 3
+
+    if dry_run:
+        blockers.append("dry_run")
+    if allow_stub:
+        blockers.append("allow_stub_enabled")
+    if not strict_runtime:
+        blockers.append("strict_runtime_disabled")
+    if degraded_mode:
+        blockers.append("degraded_mode_active")
+    if source_mode == "all_fixture":
+        blockers.append("all_fixture_source_mode")
+    if seed_count < min_quality_claim_seeds:
+        blockers.append(f"insufficient_seeds:{seed_count}<{min_quality_claim_seeds}")
+    if not settlement_reconciled:
+        blockers.append("settlement_reconciliation_failed")
+    if not final_pass:
+        blockers.append("benchmark_final_pass_false")
+
+    uplift = (
+        score_provenance.get("counterfactual", {})
+        .get("uplift_model_minus_fixture", {})
+    )
+    if not bool(uplift.get("positive_ci95", False)):
+        blockers.append("counterfactual_uplift_ci95_not_positive")
+
+    if final_pass and not blockers:
+        claim_level = "L2"
+    elif final_pass:
+        claim_level = "L1"
+    else:
+        claim_level = "L0"
+    quality_claim_ready = claim_level == "L2"
+    return claim_level, quality_claim_ready, blockers
+
+
 def run_phase1(
     policy: BenchmarkPolicy,
     tournament_config_path: str,
@@ -738,7 +796,7 @@ def run_phase1(
         ("Debater B", model_name),
         ("BenchmarkJudge", judge_model_configured),
     ]
-    if policy.runtime.require_preflight:
+    if policy.runtime.require_preflight and not dry_run:
         run_preflight(model_specs, allow_stub=allow_stub, allow_backend_fallback=allow_stub)
 
     if dry_run:
@@ -829,6 +887,10 @@ def run_phase1(
                     "quality_tier_counts": {},
                 },
             },
+            claim_level="L0",
+            quality_claim_ready=False,
+            quality_claim_blockers=["dry_run", "benchmark_final_pass_false"],
+            settlement_reconciled=False,
         )
 
     adapter = OfflineFixtureAdapter(fixtures_dir)
@@ -855,6 +917,7 @@ def run_phase1(
     live_source_failures: List[Dict] = []
     trace_counts: List[int] = []
     trace_tier_counts: Dict[str, int] = {}
+    settlement_all_ok = True
 
     for seed in seeds:
         gates = _run_seed_gates(policy=policy, judge_model_path=judge_model_path, seed=seed, allow_stub=allow_stub)
@@ -873,8 +936,8 @@ def run_phase1(
         trace_quality_tier = assign_trace_quality_tier(
             run_metadata={"runtime_fingerprint": {"strict_runtime": strict_runtime}},
             gate_summary={
-                "judge_variance_pass": gate_flags.get("judge_variance", False),
-                "judge_calibration_pass": gate_flags.get("judge_calibration", False),
+                "judge_variance_pass": gate_flags.get("judge_variance"),
+                "judge_calibration_pass": gate_flags.get("judge_calibration"),
                 "gates_pass": gates_pass,
             },
         )
@@ -977,6 +1040,25 @@ def run_phase1(
         trajectory_records.append(trajectory)
         seed_validity_issues.extend(trajectory_issues)
 
+        settlement_report = reconcile_settlement(
+            transcript_path=artifact_paths["transcript_json"],
+            ledger_path=artifact_paths["ledger_json"],
+            results_path=artifact_paths.get("results_json"),
+            tolerance=1e-6,
+        )
+        settlement_report_path = str(Path(artifact_paths["transcript_json"]).with_name("settlement_reconcile.json"))
+        Path(settlement_report_path).write_text(json.dumps(settlement_report, indent=2), encoding="utf-8")
+        artifact_paths["settlement_reconcile_json"] = settlement_report_path
+        settlement_ok = bool(settlement_report.get("ok", False))
+        settlement_all_ok = settlement_all_ok and settlement_ok
+        if not settlement_ok:
+            seed_validity_issues.append(
+                "Settlement reconciliation failed: "
+                f"bet_mismatches={settlement_report.get('bet_mismatch_count', 0)}, "
+                f"pot_mismatches={settlement_report.get('pot_split_mismatch_count', 0)}, "
+                f"pending_rounds={settlement_report.get('pending_bet_round_count', 0)}"
+            )
+
         valid_run = len(seed_validity_issues) == 0
         if not valid_run:
             overall_validity_issues.extend(seed_validity_issues)
@@ -1061,6 +1143,7 @@ def run_phase1(
         "counterfactual_uplift_ci95_low": float(uplift_meta.get("ci95_low", 0.0)),
         "counterfactual_uplift_ci95_high": float(uplift_meta.get("ci95_high", 0.0)),
         "counterfactual_uplift_positive_ci95": bool(uplift_meta.get("positive_ci95", False)),
+        "settlement_reconciled": settlement_all_ok,
     }
 
     metadata_blob = {
@@ -1082,6 +1165,25 @@ def run_phase1(
     score_provenance = _summarize_score_provenance(seed_results)
     score_provenance["counterfactual"] = counterfactual_summary
     score_provenance["model_derived_metrics_enabled"] = enable_model_derived_metrics
+    claim_level, quality_claim_ready, quality_claim_blockers = _derive_claim_posture(
+        final_pass=final_pass,
+        allow_stub=allow_stub,
+        strict_runtime=strict_runtime,
+        dry_run=False,
+        source_mode=source_mode,
+        degraded_mode=any_degraded_mode,
+        settlement_reconciled=settlement_all_ok,
+        score_provenance=score_provenance,
+        seed_count=len(seed_results),
+    )
+    gate_summary.update(
+        {
+            "claim_level": claim_level,
+            "quality_claim_ready": quality_claim_ready,
+            "quality_claim_blocker_count": len(quality_claim_blockers),
+            "quality_claim_blockers": quality_claim_blockers,
+        }
+    )
 
     return BenchmarkRunResult(
         benchmark_id=policy.meta.benchmark_id,
@@ -1140,6 +1242,12 @@ def run_phase1(
                 "enable_model_derived_metrics": enable_model_derived_metrics,
             },
             "score_provenance": score_provenance,
+            "claim": {
+                "claim_level": claim_level,
+                "quality_claim_ready": quality_claim_ready,
+                "quality_claim_blockers": quality_claim_blockers,
+                "settlement_reconciled": settlement_all_ok,
+            },
             "trace_summary": {
                 "seed_trace_counts": trace_counts,
                 "total_trace_count": int(sum(trace_counts)),
@@ -1157,6 +1265,10 @@ def run_phase1(
             },
         },
         notes=[f"metadata_hash={_hash_dict(metadata_blob)}"],
+        claim_level=claim_level,
+        quality_claim_ready=quality_claim_ready,
+        quality_claim_blockers=quality_claim_blockers,
+        settlement_reconciled=settlement_all_ok,
     )
 
 

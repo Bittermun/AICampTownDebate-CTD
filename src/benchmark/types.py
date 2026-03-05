@@ -96,6 +96,10 @@ class BenchmarkRunResult:
     artifact_paths: Dict[str, str] = field(default_factory=dict)
     run_metadata: Dict[str, Any] = field(default_factory=dict)
     notes: List[str] = field(default_factory=list)
+    claim_level: str = "L0"
+    quality_claim_ready: bool = False
+    quality_claim_blockers: List[str] = field(default_factory=list)
+    settlement_reconciled: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -159,4 +163,8 @@ class BenchmarkRunResult:
             "artifact_paths": self.artifact_paths,
             "run_metadata": self.run_metadata,
             "notes": self.notes,
+            "claim_level": self.claim_level,
+            "quality_claim_ready": self.quality_claim_ready,
+            "quality_claim_blockers": self.quality_claim_blockers,
+            "settlement_reconciled": self.settlement_reconciled,
         }

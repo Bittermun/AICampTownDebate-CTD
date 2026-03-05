@@ -1,0 +1,1 @@
+{"config": {"debater_a": "A", "debater_b": "B"}, "rounds": [{"round_id": 1, "tokens_awarded_a": 10.0, "tokens_awarded_b": 10.0, "turns": [{"type": "payout", "speaker": "A", "content": "**Bet Outcome**: WON\n**Payout**: +10.0 tokens"}]}]}

@@ -10,7 +10,7 @@ import sys
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.benchmark.batch_utils import BatchRunRecord, summarize_batch  # noqa: E402
+from src.benchmark.batch_utils import BatchRunRecord, load_checkpoint_jsonl, summarize_batch  # noqa: E402
 
 
 def main() -> int:
@@ -19,12 +19,11 @@ def main() -> int:
     p.add_argument("--output", required=True)
     args = p.parse_args()
 
-    records = []
-    for line in Path(args.summary_jsonl).read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        raw = json.loads(line)
-        records.append(BatchRunRecord(**raw))
+    rows, _ = load_checkpoint_jsonl(
+        args.summary_jsonl,
+        schema_name="benchmark.phase1.batch_summary",
+    )
+    records = [BatchRunRecord(**raw) for raw in rows]
 
     agg = summarize_batch(records)
     out = Path(args.output)
@@ -36,4 +35,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

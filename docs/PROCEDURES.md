@@ -71,6 +71,12 @@ set VLLM_BASE_URL=http://localhost:8000
 python demo_tournament.py --config configs/vllm_tournament_recommended.yaml --gate-judge-variance
 ```
 
+Experimental multi-agent injection run:
+
+```bash
+python demo_tournament.py --config configs/multi_agent_experimental.yaml --gate-judge-variance
+```
+
 One-command vLLM pipeline (start server, wait, gate, tournament, logs):
 
 ```bash
@@ -110,6 +116,12 @@ python tests/stress_judge_variance.py --model ollama:qwen2.5:1.5b
 
 ```bash
 python tests/reproduce_baseline_vs_economy.py --config configs/tournament_config.yaml
+```
+
+- Multi-agent ON/OFF paired ablation:
+
+```bash
+python tests/reproduce_multi_agent_ablation.py --config configs/multi_agent_experimental.yaml --seeds 101,202,303 --rounds 3
 ```
 
 - Economy parameter derivation:

@@ -6,24 +6,33 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from datetime import datetime, timezone
+import hashlib
 import os
 from pathlib import Path
 import json
 import subprocess
 import sys
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.benchmark.batch_utils import (  # noqa: E402
+    BATCH_CHECKPOINT_FILENAME as CHECKPOINT_FILENAME,
+    BATCH_CHECKPOINT_SCHEMA_VERSION as CHECKPOINT_SCHEMA_VERSION,
     BatchRunRecord,
+    assert_resume_compatible as _assert_resume_compatible,
+    atomic_write_json as _atomic_write_json,
+    build_batch_checkpoint_payload,
     detect_bankruptcy_from_summary,
+    load_batch_checkpoint as _load_checkpoint,
+    load_checkpoint_jsonl,
     load_json,
     persist_jsonl,
     should_retry_bankruptcy,
     summarize_batch,
 )
+PHASE1_SUMMARY_SCHEMA_NAME = "benchmark.phase1.batch_summary"
 
 
 def _parse_csv_int(raw: str) -> List[int]:
@@ -38,6 +47,19 @@ def _is_openai_model(model_id: Optional[str]) -> bool:
     return bool(model_id) and str(model_id).startswith("openai:")
 
 
+def _is_vllm_model(model_id: Optional[str]) -> bool:
+    return bool(model_id) and str(model_id).startswith("vllm:")
+
+
+def _uses_endpoint_roster(model_id: Optional[str], judge_model: Optional[str]) -> bool:
+    return (
+        _is_openai_model(model_id)
+        or _is_openai_model(judge_model)
+        or _is_vllm_model(model_id)
+        or _is_vllm_model(judge_model)
+    )
+
+
 def _build_jobs(
     seeds: List[int],
     labels: List[str],
@@ -46,13 +68,127 @@ def _build_jobs(
     judge_model: Optional[str],
 ) -> List[Tuple[int, str, Optional[str]]]:
     jobs: List[Tuple[int, str, Optional[str]]] = []
-    use_endpoints = bool(openai_base_urls) and (
-        _is_openai_model(model_id) or _is_openai_model(judge_model)
-    )
+    use_endpoints = bool(openai_base_urls) and _uses_endpoint_roster(model_id, judge_model)
     for idx, (seed, label) in enumerate((seed, label) for seed in seeds for label in labels):
         endpoint = openai_base_urls[idx % len(openai_base_urls)] if use_endpoints else None
         jobs.append((seed, label, endpoint))
     return jobs
+
+
+def _job_key(seed: int, label: str) -> Tuple[int, str]:
+    return (int(seed), str(label))
+
+
+def _record_job_key(record: BatchRunRecord) -> Tuple[int, str]:
+    return _job_key(record.seed, record.topic_set)
+
+
+def _record_from_payload(payload: Dict[str, Any]) -> BatchRunRecord:
+    return BatchRunRecord(
+        run_id=str(payload.get("run_id", "")),
+        attempt=int(payload.get("attempt", 1)),
+        seed=int(payload.get("seed", 0)),
+        topic_set=str(payload.get("topic_set", "")),
+        summary_path=str(payload.get("summary_path", "")),
+        registry_path=str(payload.get("registry_path", "")),
+        return_code=int(payload.get("return_code", 0)),
+        bankrupt=bool(payload.get("bankrupt", False)),
+        terminal_bankrupt=bool(payload.get("terminal_bankrupt", False)),
+        pass_fail=str(payload.get("pass_fail", "unknown")),
+        final_pass=bool(payload.get("final_pass", False)),
+        benchmark_score_pass=bool(payload.get("benchmark_score_pass", False)),
+        gates_pass=bool(payload.get("gates_pass", False)),
+        validity_pass=bool(payload.get("validity_pass", False)),
+        degraded_mode=bool(payload.get("degraded_mode", False)),
+        live_source_failures=int(payload.get("live_source_failures", 0)),
+        original_model_id=str(payload.get("original_model_id", "")),
+        effective_model_id=str(payload.get("effective_model_id", "")),
+        openai_base_url=payload.get("openai_base_url"),
+        was_replaced=bool(payload.get("was_replaced", False)),
+        replacement_index=int(payload.get("replacement_index", 0)),
+        replaced_from_run_id=payload.get("replaced_from_run_id"),
+    )
+
+
+def _load_checkpoint_records(summary_jsonl: Path) -> List[BatchRunRecord]:
+    rows, stats = load_checkpoint_jsonl(
+        str(summary_jsonl),
+        schema_name=PHASE1_SUMMARY_SCHEMA_NAME,
+    )
+    if stats["rows_malformed"] or stats["rows_invalid"]:
+        print(
+            f"[batch][warn] checkpoint decode issues: malformed={stats['rows_malformed']} "
+            f"invalid={stats['rows_invalid']}"
+        )
+    if stats["rows_legacy"]:
+        print(f"[batch] migrated legacy summary rows={stats['rows_legacy']} -> schema=v1")
+
+    records: List[BatchRunRecord] = []
+    for index, payload in enumerate(rows, start=1):
+        try:
+            records.append(_record_from_payload(payload))
+        except Exception as exc:
+            print(f"[batch][warn] skipping malformed checkpoint row index={index}: {exc}")
+    return records
+
+
+def _is_completed_primary_record(record: BatchRunRecord) -> bool:
+    expected_run_id = f"seed{record.seed}_{record.topic_set}"
+    return (
+        record.run_id == expected_run_id
+        and int(record.replacement_index) == 0
+        and str(record.summary_path).strip() != ""
+        and int(record.return_code) != 9
+    )
+
+
+def _extract_completed_jobs(records: List[BatchRunRecord]) -> Set[Tuple[int, str]]:
+    completed: Set[Tuple[int, str]] = set()
+    for record in records:
+        if _is_completed_primary_record(record):
+            completed.add(_record_job_key(record))
+    return completed
+
+
+def _atomic_write_summary(path: Path, records: List[BatchRunRecord]) -> None:
+    persist_jsonl(
+        str(path),
+        (r.to_dict() for r in records),
+        schema_name=PHASE1_SUMMARY_SCHEMA_NAME,
+    )
+
+
+def _config_fingerprint(
+    *,
+    args: argparse.Namespace,
+    seeds: List[int],
+    labels: List[str],
+    openai_base_urls: List[str],
+) -> str:
+    payload = {
+        "config": args.config,
+        "tournament_config": args.tournament_config,
+        "model_id": args.model_id,
+        "judge_model": args.judge_model,
+        "seeds": list(seeds),
+        "matrix_labels": list(labels),
+        "offline_fixtures_dir": args.offline_fixtures_dir,
+        "source_mode": args.source_mode,
+        "allow_stub": bool(args.allow_stub),
+        "bankruptcy_retries": int(args.bankruptcy_retries),
+        "replacement_mode": args.replacement_mode,
+        "replacement_roster": _parse_csv_str(args.replacement_roster),
+        "replacement_judge_model": args.replacement_judge_model,
+        "max_replacements_per_run": int(args.max_replacements_per_run),
+        "openai_base_urls": list(openai_base_urls),
+        "openai_endpoint_strategy": "round_robin" if openai_base_urls else "none",
+    }
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def _checkpoint_payload(*, batch_id: str, fingerprint: str) -> Dict[str, Any]:
+    return build_batch_checkpoint_payload(batch_id=batch_id, config_fingerprint=fingerprint)
 
 
 def _run_once(
@@ -107,7 +243,10 @@ def _run_once(
         cmd.append("--cache-only-live")
     env = os.environ.copy()
     if openai_base_url:
-        env["OPENAI_COMPAT_BASE_URL"] = openai_base_url
+        if _is_openai_model(model_id) or _is_openai_model(judge_model):
+            env["OPENAI_COMPAT_BASE_URL"] = openai_base_url
+        if _is_vllm_model(model_id) or _is_vllm_model(judge_model):
+            env["VLLM_BASE_URL"] = openai_base_url
     proc = subprocess.run(cmd, text=True, env=env)
     return int(proc.returncode)
 
@@ -256,6 +395,8 @@ def main() -> int:
     p.add_argument("--seeds", default="101,202,303")
     p.add_argument("--matrix-labels", default="set01")
     p.add_argument("--output-dir", default="logs/benchmark_batches")
+    p.add_argument("--batch-id", default=None, help="Optional custom batch ID (required with --resume)")
+    p.add_argument("--resume", action="store_true", help="Resume an existing --batch-id by skipping completed seed/label jobs")
     p.add_argument("--offline-fixtures-dir", default="benchmarks/fixtures")
     p.add_argument("--source-mode", default="core_live_stretch_fixture", choices=["default", "core_live_stretch_fixture", "all_live", "all_fixture"])
     p.add_argument("--concurrency", type=int, default=2)
@@ -270,7 +411,10 @@ def main() -> int:
     p.add_argument(
         "--openai-base-urls",
         default="",
-        help="Comma-separated endpoint roster for openai:* models. Jobs are assigned round-robin.",
+        help=(
+            "Comma-separated endpoint roster for openai:* and vllm:* models. "
+            "Jobs are assigned round-robin."
+        ),
     )
     args = p.parse_args()
 
@@ -280,9 +424,15 @@ def main() -> int:
     if not seeds or not labels:
         raise ValueError("seeds and matrix-labels must be non-empty")
 
-    batch_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    if args.resume and not args.batch_id:
+        raise ValueError("--resume requires --batch-id")
+
+    batch_id = args.batch_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     batch_root = Path(args.output_dir) / batch_id
+    if args.resume and not batch_root.exists():
+        raise FileNotFoundError(f"--resume requested but batch directory does not exist: {batch_root}")
     batch_root.mkdir(parents=True, exist_ok=True)
+    checkpoint_path = batch_root / CHECKPOINT_FILENAME
 
     jobs = _build_jobs(
         seeds=seeds,
@@ -291,21 +441,55 @@ def main() -> int:
         model_id=args.model_id,
         judge_model=args.judge_model,
     )
-    records: List[BatchRunRecord] = []
+    config_fp = _config_fingerprint(args=args, seeds=seeds, labels=labels, openai_base_urls=openai_base_urls)
+    if args.resume:
+        checkpoint = _load_checkpoint(checkpoint_path)
+        _assert_resume_compatible(checkpoint, config_fp)
+    else:
+        _atomic_write_json(
+            checkpoint_path,
+            build_batch_checkpoint_payload(batch_id=batch_id, config_fingerprint=config_fp),
+        )
 
-    if openai_base_urls and not (_is_openai_model(args.model_id) or _is_openai_model(args.judge_model)):
-        print("[batch][warn] --openai-base-urls ignored because model/judge are not openai:*")
+    all_job_keys = {_job_key(seed, label) for seed, label, _ in jobs}
+    summary_jsonl = batch_root / "batch_summary.jsonl"
+    existing_records = _load_checkpoint_records(summary_jsonl) if args.resume else []
+    completed_job_keys = _extract_completed_jobs(existing_records) if args.resume else set()
+    completed_job_keys &= all_job_keys
+    records: List[BatchRunRecord] = (
+        [r for r in existing_records if _record_job_key(r) in completed_job_keys] if args.resume else []
+    )
+    if args.resume:
+        # Rewrite checkpoint to keep only completed jobs and drop stale partial/error rows.
+        _atomic_write_summary(summary_jsonl, records)
+    elif summary_jsonl.exists():
+        _atomic_write_summary(summary_jsonl, [])
+
+    pending_jobs = [
+        (seed, label, endpoint)
+        for seed, label, endpoint in jobs
+        if _job_key(seed, label) not in completed_job_keys
+    ]
+
+    if openai_base_urls and not _uses_endpoint_roster(args.model_id, args.judge_model):
+        print("[batch][warn] --openai-base-urls ignored because model/judge are not openai:* or vllm:*")
+    if args.resume:
+        print(
+            f"[batch] resume batch_id={batch_id} completed_jobs={len(completed_job_keys)} "
+            f"pending_jobs={len(pending_jobs)}"
+        )
 
     with ThreadPoolExecutor(max_workers=max(1, int(args.concurrency))) as ex:
         futs = {
             ex.submit(_run_job, args, batch_id, seed, label, endpoint): (seed, label, endpoint)
-            for seed, label, endpoint in jobs
+            for seed, label, endpoint in pending_jobs
         }
         for fut in as_completed(futs):
             seed, label, endpoint = futs[fut]
             try:
                 for rec in fut.result():
                     records.append(rec)
+                    _atomic_write_summary(summary_jsonl, records)
                     endpoint_note = f" endpoint={rec.openai_base_url}" if rec.openai_base_url else ""
                     print(
                         f"[batch] seed={seed} label={label} run_id={rec.run_id} attempt={rec.attempt} "
@@ -330,13 +514,15 @@ def main() -> int:
                         openai_base_url=endpoint,
                     )
                 )
+                _atomic_write_summary(summary_jsonl, records)
 
     records.sort(key=lambda r: (r.seed, r.topic_set, r.replacement_index, r.run_id))
-    summary_jsonl = batch_root / "batch_summary.jsonl"
-    persist_jsonl(str(summary_jsonl), (r.to_dict() for r in records))
+    _atomic_write_summary(summary_jsonl, records)
 
     aggregate = summarize_batch(records)
     manifest = {
+        "checkpoint_schema_version": CHECKPOINT_SCHEMA_VERSION,
+        "config_fingerprint": config_fp,
         "batch_id": batch_id,
         "config": args.config,
         "tournament_config": args.tournament_config,
@@ -346,6 +532,7 @@ def main() -> int:
         "matrix_labels": labels,
         "source_mode": args.source_mode,
         "concurrency": args.concurrency,
+        "resume": bool(args.resume),
         "bankruptcy_retries": args.bankruptcy_retries,
         "replacement_mode": args.replacement_mode,
         "replacement_roster": _parse_csv_str(args.replacement_roster),
@@ -353,15 +540,21 @@ def main() -> int:
         "max_replacements_per_run": args.max_replacements_per_run,
         "openai_base_urls": openai_base_urls,
         "openai_endpoint_strategy": "round_robin" if openai_base_urls else "none",
+        "endpoint_model_prefixes": ["openai", "vllm"],
         "records": [asdict(r) for r in records],
     }
-    (batch_root / "batch_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    (batch_root / "aggregate_report.json").write_text(json.dumps(aggregate, indent=2), encoding="utf-8")
+    _atomic_write_json(batch_root / "batch_manifest.json", manifest)
+    _atomic_write_json(batch_root / "aggregate_report.json", aggregate)
 
     print(f"[batch] wrote: {batch_root / 'batch_manifest.json'}")
     print(f"[batch] wrote: {summary_jsonl}")
     print(f"[batch] wrote: {batch_root / 'aggregate_report.json'}")
-    return 0
+    tolerated_codes = {0, 2, 3}
+    has_fatal_error = any(
+        int(r.return_code) not in tolerated_codes or (not str(r.summary_path).strip())
+        for r in records
+    )
+    return 1 if has_fatal_error else 0
 
 
 if __name__ == "__main__":

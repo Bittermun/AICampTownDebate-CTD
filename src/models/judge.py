@@ -371,7 +371,7 @@ class LLMJudge(BaseJudge):
         try:
             # Try allocation split format first
             def _extract_int(field):
-                m = re.search(r'"' + re.escape(field) + r'"\s*:\s*([0-9]+)', text)
+                m = re.search(r'"' + re.escape(field) + r'"\s*:\s*\[?(?:"|\')?([0-9]+)', text)
                 return int(m.group(1)) if m else None
 
             acc_split  = _extract_int("accuracy_split")

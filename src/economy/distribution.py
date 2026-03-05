@@ -2,6 +2,7 @@
 Distribution: Converts judge confidence into token awards.
 """
 from dataclasses import dataclass
+import math
 
 
 @dataclass
@@ -33,10 +34,24 @@ class TokenDistributor:
         """
         Pari-mutuel Pot Split: Total pot (Base Award + Extra) split exactly by final confidence.
         """
+        for name, value in (
+            ("confidence_a", confidence_a),
+            ("confidence_b", confidence_b),
+            ("extra_pot_tokens", extra_pot_tokens),
+        ):
+            if not math.isfinite(value):
+                raise ValueError(f"{name} must be finite (got {value})")
+        if confidence_a < 0.0 or confidence_b < 0.0:
+            raise ValueError(
+                f"Confidences must be non-negative (got confidence_a={confidence_a}, confidence_b={confidence_b})"
+            )
+
         total_pot = self.tokens_per_round + extra_pot_tokens
+        if not math.isfinite(total_pot) or total_pot < 0.0:
+            raise ValueError(f"total_pot must be finite and non-negative (got {total_pot})")
         total_conf = confidence_a + confidence_b
-        
-        if total_conf == 0:
+
+        if total_conf <= 0:
             tokens_a = total_pot / 2
             tokens_b = total_pot / 2
         else:

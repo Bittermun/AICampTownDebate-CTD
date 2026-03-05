@@ -164,22 +164,34 @@ class VLLMBackend:
         if not self.is_available():
             return GenerationResult(text="[VLLM_UNAVAILABLE] vLLM server not responding", tokens_used=0)
         
-        try:
-            timeout = aiohttp.ClientTimeout(total=self.config.timeout)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                payload = self._build_chat_payload(prompt, system, max_tokens, json_mode, temperature)
-                async with session.post(
-                    f"{self.config.base_url}/v1/chat/completions",
-                    json=payload,
-                    headers=self._headers(),
-                ) as resp:
-                    data = await resp.json()
-                    if "choices" in data:
-                        message = data["choices"][0].get("message", {})
-                        text = message.get("content", "").strip()
-                        tokens_used = data.get("usage", {}).get("completion_tokens", 0)
-                        return GenerationResult(text=text, tokens_used=tokens_used)
-                    # Fallback to sync completion path for compatibility/diagnostics
-                    return self.generate(prompt, system, max_tokens, json_mode, temperature)
-        except Exception as e:
-            return GenerationResult(text=f"[ASYNC_VLLM_ERROR] {str(e)}", tokens_used=0)
+        import asyncio
+        import aiohttp
+        
+        timeout = aiohttp.ClientTimeout(total=self.config.timeout)
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    payload = self._build_chat_payload(prompt, system, max_tokens, json_mode, temperature)
+                    async with session.post(
+                        f"{self.config.base_url}/v1/chat/completions",
+                        json=payload,
+                        headers=self._headers(),
+                    ) as resp:
+                        resp.raise_for_status()
+                        data = await resp.json()
+                        if "choices" in data:
+                            message = data["choices"][0].get("message", {})
+                            text = message.get("content", "").strip()
+                            tokens_used = data.get("usage", {}).get("completion_tokens", 0)
+                            return GenerationResult(text=text, tokens_used=tokens_used)
+                        return self.generate(prompt, system, max_tokens, json_mode, temperature)
+            except Exception as e:
+                if isinstance(e, asyncio.CancelledError):
+                    raise
+                if attempt == max_retries - 1:
+                    print(f"[VLLMBackend] Max retries reached: {e}")
+                    return GenerationResult(text=f"[ASYNC_VLLM_ERROR] {str(e)}", tokens_used=0)
+                print(f"[VLLMBackend] Transient error {type(e).__name__}. Retrying {attempt+1}/{max_retries} in 5s...")
+                await asyncio.sleep(5)

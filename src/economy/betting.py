@@ -4,6 +4,7 @@ Betting: Handles bet placement and resolution.
 from dataclasses import dataclass
 from typing import Optional
 from enum import Enum
+import math
 
 
 class BetStatus(Enum):
@@ -30,10 +31,21 @@ class BettingManager:
     """
     
     def __init__(self, fee_rate: float = 0.05, min_bet: float = 5.0):
+        if not math.isfinite(fee_rate) or fee_rate < 0.0 or fee_rate > 1.0:
+            raise ValueError(f"fee_rate must be between 0 and 1 (got {fee_rate})")
+        if not math.isfinite(min_bet) or min_bet <= 0.0:
+            raise ValueError(f"min_bet must be > 0 (got {min_bet})")
         self.fee_rate = fee_rate  # 5% fee on bets
         self.min_bet = min_bet
         self._bets: list[Bet] = []
         self._bet_counter = 0
+
+    @staticmethod
+    def _resolve_fee_rate(custom_fee_rate: Optional[float], default_fee_rate: float) -> Optional[float]:
+        fee_rate = custom_fee_rate if custom_fee_rate is not None else default_fee_rate
+        if not math.isfinite(fee_rate) or fee_rate < 0.0 or fee_rate > 1.0:
+            return None
+        return fee_rate
     
     def place_bet(
         self,
@@ -47,22 +59,33 @@ class BettingManager:
         Place a bet. Deducts amount + fee from bettor.
         Returns Bet if successful, None if cannot afford.
         """
+        if not math.isfinite(amount) or amount <= 0.0:
+            return None
         if amount < self.min_bet:
             return None
-        
-        fee_rate = custom_fee_rate if custom_fee_rate is not None else self.fee_rate
+
+        fee_rate = self._resolve_fee_rate(custom_fee_rate=custom_fee_rate, default_fee_rate=self.fee_rate)
+        if fee_rate is None:
+            return None
         fee = amount * fee_rate
+        if not math.isfinite(fee):
+            return None
         total_cost = amount + fee
-        
+        if not math.isfinite(total_cost):
+            return None
+
         # Check if can afford
         if not ledger.can_afford(bettor_id, total_cost):
             return None
-        
+
         # Deduct stake
-        ledger.deduct(bettor_id, amount, "bet_stake", round_id)
+        if not ledger.deduct(bettor_id, amount, "bet_stake", round_id):
+            return None
         # Deduct fee (burned)
-        ledger.deduct(bettor_id, fee, "bet_fee", round_id)
-        
+        if fee > 0 and not ledger.deduct(bettor_id, fee, "bet_fee", round_id):
+            ledger.award(bettor_id, amount, "bet_refund_fee_deduct_failed", round_id)
+            return None
+
         # Create bet
         self._bet_counter += 1
         bet = Bet(

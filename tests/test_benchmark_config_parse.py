@@ -36,6 +36,22 @@ def test_tournament_config_debater_knob_defaults():
     assert d0.kelly_cap == 0.25
     assert d0.verbosity_scale_enabled is True
     assert d0.verbosity_base_tokens == 600
+    assert d0.multi_agent_enabled is False
+    assert d0.multi_agent_mode == "none"
+    assert d0.multi_agent_max_tokens == 160
+    assert d0.multi_agent_min_balance == 80.0
+
+
+def test_multi_agent_experimental_config_parse():
+    cfg = load_config("configs/multi_agent_experimental.yaml")
+    d0 = cfg.debaters[0]
+    d1 = cfg.debaters[1]
+    assert d0.multi_agent_enabled is True
+    assert d1.multi_agent_enabled is True
+    assert d0.multi_agent_mode == "critique"
+    assert d1.multi_agent_mode == "synthesize"
+    assert d0.multi_agent_max_tokens == 120
+    assert d1.multi_agent_max_tokens == 120
 
 
 def test_missing_required_field_raises():
@@ -58,5 +74,6 @@ if __name__ == "__main__":
     test_load_valid_policy()
     test_non_blocking_group_parse()
     test_tournament_config_debater_knob_defaults()
+    test_multi_agent_experimental_config_parse()
     test_missing_required_field_raises()
     print("test_benchmark_config_parse: PASS")

@@ -59,6 +59,12 @@ Recommended Ollama scale-up run (available on this machine now):
 python demo_tournament.py --config configs/ollama_tournament_recommended.yaml --gate-judge-variance
 ```
 
+Experimental multi-agent injection run (peer-draft critique/synthesis):
+
+```bash
+python demo_tournament.py --config configs/multi_agent_experimental.yaml --gate-judge-variance
+```
+
 Recommended vLLM research tournament (24 rounds):
 
 ```bash
@@ -98,6 +104,12 @@ Baseline vs economy comparison:
 
 ```bash
 python tests/reproduce_baseline_vs_economy.py --config configs/tournament_config.yaml
+```
+
+Multi-agent ON/OFF paired ablation:
+
+```bash
+python tests/reproduce_multi_agent_ablation.py --config configs/multi_agent_experimental.yaml --seeds 101,202,303 --rounds 3
 ```
 
 Economy calibration from runway assumptions:

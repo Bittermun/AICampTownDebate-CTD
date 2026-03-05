@@ -32,6 +32,7 @@ class TournamentResult:
     started_at: str
     ended_at: str
     eliminated: Optional[str] = None  # If someone went bankrupt
+    early_stop_reason: Optional[str] = None
     transcript: Optional[DebateTranscript] = None
 
 
@@ -82,6 +83,7 @@ class Tournament:
         self._results: List[DynamicRoundResult] = []
         self._transcript: Optional[DebateTranscript] = None
         self._eliminated: Optional[str] = None
+        self._early_stop_reason: Optional[str] = None
     
     def run(self) -> TournamentResult:
         """Run the full tournament."""
@@ -110,17 +112,29 @@ class Tournament:
                 
                 print(f"\n=== Round {round_id}/{self.config.num_rounds}: {topic[:50]}... ===")
                 
-                # Check bankruptcy before starting round
+                # Check early stopping conditions (SPRT & Bankruptcy)
                 bal_a = self.ledger.balance(self.debater_a.name)
                 bal_b = self.ledger.balance(self.debater_b.name)
                 if bal_a <= 0:
-                    print(f"  [ELIMINATED] {self.debater_a.name} is bankrupt!")
+                    print(f"  [EARLY STOP] {self.debater_a.name} is bankrupt!")
                     self._eliminated = self.debater_a.name
+                    self._early_stop_reason = "bankruptcy"
                     break
                 if bal_b <= 0:
-                    print(f"  [ELIMINATED] {self.debater_b.name} is bankrupt!")
+                    print(f"  [EARLY STOP] {self.debater_b.name} is bankrupt!")
                     self._eliminated = self.debater_b.name
+                    self._early_stop_reason = "bankruptcy"
                     break
+                    
+                # SPRT Unrecoverable Delta (if past midpoint and difference > 50 tokens)
+                if round_id > self.config.num_rounds // 2:
+                    diff = abs(bal_a - bal_b)
+                    if diff >= 50.0:
+                        loser = self.debater_b.name if bal_a > bal_b else self.debater_a.name
+                        print(f"  [EARLY STOP] Unrecoverable delta ({diff:.1f} tokens). {loser} mathematically eliminated.")
+                        self._eliminated = loser
+                        self._early_stop_reason = "sprt_unrecoverable"
+                        break
                 
                 # Create round transcript
                 round_transcript = None
@@ -217,6 +231,7 @@ class Tournament:
             started_at=started_at,
             ended_at=ended_at,
             eliminated=self._eliminated,
+            early_stop_reason=self._early_stop_reason,
             transcript=self._transcript,
         )
     
@@ -235,6 +250,14 @@ class Tournament:
             print(f"Transcript saved to {transcript_md}")
         
         # Save summary
+        def _round_bet_status_counts(round_result: DynamicRoundResult) -> dict[str, int]:
+            counts = {"pending": 0, "won": 0, "lost": 0, "cancelled": 0}
+            for bet in getattr(round_result, "all_bets", []):
+                status = str(getattr(getattr(bet, "status", ""), "value", "")).lower()
+                if status in counts:
+                    counts[status] += 1
+            return counts
+
         summary = {
             "config": {
                 "num_rounds": self.config.num_rounds,
@@ -250,10 +273,15 @@ class Tournament:
                     "tokens_a": r.tokens_awarded_a,
                     "tokens_b": r.tokens_awarded_b,
                     "bets": len(getattr(r, 'all_bets', getattr(r, 'bets_placed', []))),
+                    "bet_status_counts": _round_bet_status_counts(r),
+                    "bets_pending": _round_bet_status_counts(r).get("pending", 0),
                 }
                 for r in self._results
             ],
             "final_balances": self.ledger.summary()["balances"],
+            "eliminated": self._eliminated,
+            "early_stop_reason": self._early_stop_reason,
+            "winner": self._eliminated if self._eliminated is False else self.debater_a.name if self.ledger.balance(self.debater_a.name) > self.ledger.balance(self.debater_b.name) else self.debater_b.name,
         }
         with open(path, "w") as f:
             json.dump(summary, f, indent=2)

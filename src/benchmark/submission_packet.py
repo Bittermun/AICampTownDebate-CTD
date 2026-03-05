@@ -70,6 +70,9 @@ def _build_claim_memo(summary: Dict[str, Any], run_label: Optional[str]) -> str:
         f"- pass_fail: `{summary.get('pass_fail', 'unknown')}`",
         f"- final_pass: `{summary.get('final_pass', False)}`",
         f"- valid_run: `{summary.get('valid_run', False)}`",
+        f"- claim_level: `{summary.get('claim_level', 'L0')}`",
+        f"- quality_claim_ready: `{summary.get('quality_claim_ready', False)}`",
+        f"- settlement_reconciled: `{summary.get('settlement_reconciled', False)}`",
         "",
         "## Scoring Provenance",
         f"- aggregate_score_source: `{prov.get('aggregate_score_source', 'unknown')}`",
@@ -87,6 +90,9 @@ def _build_claim_memo(summary: Dict[str, Any], run_label: Optional[str]) -> str:
         "## Notes",
         "- This packet is evidence-ready but does not imply a quality claim unless all required gates pass.",
     ]
+    blockers = summary.get("quality_claim_blockers", [])
+    if isinstance(blockers, list) and blockers:
+        lines.extend(["", "## Claim Blockers", *[f"- `{b}`" for b in blockers]])
     return "\n".join(lines) + "\n"
 
 
@@ -174,4 +180,3 @@ def build_submission_packet(
         "summary_path": str(summary_dst),
         "file_count": len(files_manifest),
     }
-

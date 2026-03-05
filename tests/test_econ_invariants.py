@@ -93,6 +93,56 @@ def test_transcript_bet_payout_matches_resolved_payout() -> None:
     assert abs(transcript_payout - round(bet.payout, 1)) < 1e-6
 
 
+def test_ledger_rejects_non_positive_deduct_amount() -> None:
+    ledger = TokenLedger(initial_balance=50.0, max_debt=0.0)
+    ledger.register("A")
+    before = ledger.balance("A")
+
+    assert ledger.deduct("A", 0.0, "noop", 1) is False
+    assert ledger.deduct("A", -1.0, "negative", 1) is False
+    assert ledger.balance("A") == before
+
+
+def test_place_bet_rejects_invalid_custom_fee_rate() -> None:
+    ledger = TokenLedger(initial_balance=100.0, max_debt=0.0)
+    ledger.register("A")
+    betting = BettingManager(fee_rate=0.05, min_bet=5.0)
+
+    assert betting.place_bet("A", 10.0, 1, ledger, custom_fee_rate=-0.1) is None
+    assert betting.place_bet("A", 10.0, 1, ledger, custom_fee_rate=1.1) is None
+    assert ledger.balance("A") == 100.0
+
+
+def test_place_bet_refunds_when_fee_deduct_fails() -> None:
+    ledger = TokenLedger(initial_balance=100.0, max_debt=0.0)
+    ledger.register("A")
+    betting = BettingManager(fee_rate=0.05, min_bet=5.0)
+    real_deduct = ledger.deduct
+
+    def _flaky_deduct(agent_id: str, amount: float, reason: str, round_id: int) -> bool:
+        if reason == "bet_fee":
+            return False
+        return real_deduct(agent_id, amount, reason, round_id)
+
+    ledger.deduct = _flaky_deduct  # type: ignore[assignment]
+    bet = betting.place_bet("A", 10.0, 1, ledger)
+    assert bet is None
+    assert ledger.balance("A") == 100.0
+
+
+def test_dynamic_round_result_carries_accounting_fields() -> None:
+    rounder, ledger = _build_rounder()
+    ctx = _base_ctx(ledger)
+    ctx.round_supply_start = sum(ledger.summary()["balances"].values())
+    rounder._phase_distribute_tokens(ctx, transcript=None)
+    rounder._audit_round_accounting(ctx)
+
+    result = rounder._build_result(ctx, observation_reports=[])
+    assert isinstance(result.accounting_ok, bool)
+    assert isinstance(result.accounting_notes, list)
+    assert result.round_supply_end >= result.round_supply_start
+
+
 if __name__ == "__main__":
     test_bet_resolution_not_transcript_dependent()
     test_invalid_respond_decision_is_normalized_to_hold()

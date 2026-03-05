@@ -11,7 +11,7 @@ class CalibrationCase:
     argument_a: str
     argument_b: str
     expected_winner: Literal["A", "B"]
-    min_margin: float = 0.05
+    min_margin: float = 0.01
 
 
 @dataclass

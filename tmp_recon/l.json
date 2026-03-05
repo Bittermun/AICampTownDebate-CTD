@@ -1,0 +1,1 @@
+{"transactions": [{"reason": "bet_won:BET-0001", "round": 1, "to": "A", "amount": 9.96}, {"reason": "pot_split", "round": 1, "to": "A", "amount": 10.0}, {"reason": "pot_split", "round": 1, "to": "B", "amount": 10.0}]}

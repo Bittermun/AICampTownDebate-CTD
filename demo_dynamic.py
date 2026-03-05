@@ -85,6 +85,10 @@ def main():
         ev_guard_edge_scale=tc.debaters[0].ev_guard_edge_scale,
         low_balance_threshold=tc.debaters[0].low_balance_threshold,
         low_balance_bet_cap=tc.debaters[0].low_balance_bet_cap,
+        multi_agent_enabled=tc.debaters[0].multi_agent_enabled,
+        multi_agent_mode=tc.debaters[0].multi_agent_mode,
+        multi_agent_max_tokens=tc.debaters[0].multi_agent_max_tokens,
+        multi_agent_min_balance=tc.debaters[0].multi_agent_min_balance,
     ))
     debater_b = Debater(DebaterConfig(
         model_path=normalize_model_path(tc.debaters[1].model),
@@ -96,6 +100,10 @@ def main():
         ev_guard_edge_scale=tc.debaters[1].ev_guard_edge_scale,
         low_balance_threshold=tc.debaters[1].low_balance_threshold,
         low_balance_bet_cap=tc.debaters[1].low_balance_bet_cap,
+        multi_agent_enabled=tc.debaters[1].multi_agent_enabled,
+        multi_agent_mode=tc.debaters[1].multi_agent_mode,
+        multi_agent_max_tokens=tc.debaters[1].multi_agent_max_tokens,
+        multi_agent_min_balance=tc.debaters[1].multi_agent_min_balance,
     ))
 
     from src.models.judge import EnsembleJudge, ConsensusJudge, LLMJudge

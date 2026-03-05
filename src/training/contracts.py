@@ -90,10 +90,29 @@ def build_preference_pairs_from_rounds(
     """
     Build coarse preference pairs from same-round decisions.
 
-    Rule (skeleton): within a round, prefer traces with larger outcome_delta;
-    if deltas tie, prefer non-PASS/HOLD decisions.
+    Rule (skeleton): within a round, prefer traces with larger signed EV proxy:
+      ev_proxy = tokens_bet * (confidence_self - confidence_opponent)
+    This is a per-decision estimate and avoids using round-level payout as a
+    direct label for every deliberation turn.
+
+    Future upgrade: switch to look-ahead balance delta once iteration-level
+    balance tracking is available in transcript/trace artifacts.
     """
     _ = summary  # Reserved for richer pairwise construction.
+
+    def _safe_float(value: Any) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _signed_ev_proxy(trace: Dict[str, Any]) -> float:
+        tokens_bet = max(0.0, _safe_float(trace.get("tokens_bet", 0.0)))
+        conf_self = _safe_float(trace.get("confidence_self", 0.0))
+        conf_opp = _safe_float(trace.get("confidence_opponent", 0.0))
+        edge = conf_self - conf_opp
+        return tokens_bet * edge
+
     by_round: Dict[int, List[Dict[str, Any]]] = {}
     for t in traces:
         rid = int(t.get("round_id", 0) or 0)
@@ -106,7 +125,7 @@ def build_preference_pairs_from_rounds(
         ordered = sorted(
             bucket,
             key=lambda x: (
-                float(x.get("outcome_delta", 0.0) or 0.0),
+                _signed_ev_proxy(x),
                 1.0 if str(x.get("decision", "")).upper() not in {"PASS", "HOLD"} else 0.0,
             ),
             reverse=True,
@@ -144,6 +163,8 @@ def build_preference_pairs_from_rounds(
                     "round_id": rid,
                     "chosen_trace_id": best.get("trace_id"),
                     "rejected_trace_id": worst.get("trace_id"),
+                    "chosen_ev_proxy": round(_signed_ev_proxy(best), 6),
+                    "rejected_ev_proxy": round(_signed_ev_proxy(worst), 6),
                 },
             )
         )
@@ -173,4 +194,3 @@ def make_manifest(
         filters=filters or {},
         notes=notes,
     )
-

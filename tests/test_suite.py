@@ -32,6 +32,7 @@ TESTS = [
 
     # Core model and prompting contracts
     ("Response Models", "tests/test_response_models.py"),
+    ("Debater Multi-Agent Injection", "tests/test_debater_multi_agent.py"),
     ("Prompt Rule Cards", "tests/test_prompt_rule_cards.py"),
 
     # Benchmark and provenance contracts (local, no live runtime required)

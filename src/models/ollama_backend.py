@@ -4,13 +4,15 @@ Handles both debater and judge operations.
 """
 import json
 import requests
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 
+import os
+
 @dataclass
 class OllamaConfig:
-    base_url: str = "http://localhost:11434"
+    base_url: str = field(default_factory=lambda: os.environ.get("OLLAMA_HOST", "http://localhost:11434"))
     model: str = "qwen2.5:1.5b"
     timeout: int = 120
 
@@ -159,19 +161,36 @@ class OllamaBackend:
         
         payload = self._build_payload(prompt, system, max_tokens, json_mode, temperature)
         
-        try:
-            timeout = aiohttp.ClientTimeout(total=self.config.timeout)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(
-                    f"{self.config.base_url}/api/generate",
-                    json=payload,
-                ) as resp:
-                    data = await resp.json()
-                    text = data.get("response", "").strip()
-                    tokens_used = data.get("eval_count", 0)
-                    return GenerationResult(text=text, tokens_used=tokens_used)
-        except Exception as e:
-            return GenerationResult(text=f"[ASYNC_ERROR] {str(e)}", tokens_used=0)
+        import asyncio
+        import aiohttp
+        
+        timeout = aiohttp.ClientTimeout(total=self.config.timeout)
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                # Need to use a fresh session to avoid hanging if the socket is tainted
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.post(
+                        f"{self.config.base_url}/api/generate",
+                        json=payload,
+                    ) as resp:
+                        # Add raise_for_status to ensure we catch HTTP bad statuses as throws
+                        resp.raise_for_status()
+                        data = await resp.json()
+                        text = data.get("response", "").strip()
+                        tokens_used = data.get("eval_count", 0)
+                        return GenerationResult(text=text, tokens_used=tokens_used)
+            except Exception as e:
+                # Catch asyncio.exceptions.CancelledError effectively to avoid freezing
+                if isinstance(e, asyncio.CancelledError):
+                    raise
+                if attempt == max_retries - 1:
+                    print(f"[OllamaBackend] Max retries reached: {e}")
+                    return GenerationResult(text=f"[ASYNC_ERROR] {str(e)}", tokens_used=0)
+                print(f"[OllamaBackend] Transient error {type(e).__name__}. Retrying {attempt+1}/{max_retries} in 5s...")
+                await asyncio.sleep(5)
+
     
     def pull_model(self, model_name: str) -> bool:
         """Pull a model from Ollama registry."""

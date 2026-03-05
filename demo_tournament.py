@@ -110,6 +110,23 @@ def main() -> int:
         return 2
     print_preflight(preflight)
     
+    # Regime Randomization: If enabled, jitter the economic parameters based on the RNG state
+    if cfg.regime_randomization:
+        print(f"\\n[REGIME RANDOMIZATION] Applying economic environment jitter for this seed...")
+        
+        # Mutate economy bounds
+        cfg.economy.initial_balance = max(60.0, cfg.economy.initial_balance * random.uniform(0.7, 1.3))
+        cfg.economy.max_debt = cfg.economy.initial_balance * random.uniform(0.1, 0.5)
+        cfg.economy.tokens_per_round = cfg.economy.tokens_per_round * random.uniform(0.8, 1.2)
+        
+        # Mutate debater math
+        for d in cfg.debaters:
+            d.low_balance_threshold = cfg.economy.initial_balance * random.uniform(0.2, 0.6)
+            d.low_balance_bet_cap = d.low_balance_threshold * random.uniform(0.2, 0.5)
+            d.kelly_scale = max(0.1, min(1.0, d.kelly_scale + random.uniform(-0.2, 0.2)))
+            
+        print(f"  Randomized Initial Balance: {cfg.economy.initial_balance:.1f} (Threshold: {cfg.debaters[0].low_balance_threshold:.1f})")
+
     # Create debaters using DebaterConfig
     debater_a = Debater(DebaterConfig(
         model_path=normalize_model_path(cfg.debaters[0].model),
@@ -127,6 +144,10 @@ def main() -> int:
         verbosity_scale_enabled=cfg.debaters[0].verbosity_scale_enabled,
         verbosity_base_tokens=cfg.debaters[0].verbosity_base_tokens,
         initial_balance_ref=cfg.economy.initial_balance,
+        multi_agent_enabled=cfg.debaters[0].multi_agent_enabled,
+        multi_agent_mode=cfg.debaters[0].multi_agent_mode,
+        multi_agent_max_tokens=cfg.debaters[0].multi_agent_max_tokens,
+        multi_agent_min_balance=cfg.debaters[0].multi_agent_min_balance,
     ))
     debater_b = Debater(DebaterConfig(
         model_path=normalize_model_path(cfg.debaters[1].model),
@@ -144,6 +165,10 @@ def main() -> int:
         verbosity_scale_enabled=cfg.debaters[1].verbosity_scale_enabled,
         verbosity_base_tokens=cfg.debaters[1].verbosity_base_tokens,
         initial_balance_ref=cfg.economy.initial_balance,
+        multi_agent_enabled=cfg.debaters[1].multi_agent_enabled,
+        multi_agent_mode=cfg.debaters[1].multi_agent_mode,
+        multi_agent_max_tokens=cfg.debaters[1].multi_agent_max_tokens,
+        multi_agent_min_balance=cfg.debaters[1].multi_agent_min_balance,
     ))
     
     # Create judge(s) from config
@@ -277,6 +302,11 @@ def main() -> int:
     print(f"Rounds: {cfg.rounds.num_rounds}")
     print(f"Topics: {len(cfg.rounds.topics)}")
     print(f"Split Pot: {cfg.economy.split_pot_enabled}")
+    print(
+        "Multi-Agent Injection: "
+        f"A={cfg.debaters[0].multi_agent_enabled}/{cfg.debaters[0].multi_agent_mode}, "
+        f"B={cfg.debaters[1].multi_agent_enabled}/{cfg.debaters[1].multi_agent_mode}"
+    )
     print(f"{'='*60}\n")
     
     # Run tournament

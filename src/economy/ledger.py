@@ -1,10 +1,11 @@
 """
 Token Ledger: Tracks balances, debt, and transaction history.
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 from datetime import datetime
 import json
+import math
 
 
 @dataclass
@@ -47,6 +48,10 @@ class TokenLedger:
     
     def can_afford(self, agent_id: str, amount: float) -> bool:
         """Check if agent can afford amount (considering max debt)."""
+        if not math.isfinite(amount):
+            return False
+        if amount < 0:
+            return False
         projected = self.balance(agent_id) - amount
         return projected >= -self.max_debt
     
@@ -78,6 +83,8 @@ class TokenLedger:
     
     def deduct(self, agent_id: str, amount: float, reason: str, round_id: int) -> bool:
         """Deduct tokens (burn/fee). Returns success."""
+        if not math.isfinite(amount) or amount <= 0:
+            return False
         if not self.can_afford(agent_id, amount):
             return False
         self._balances[agent_id] -= amount
