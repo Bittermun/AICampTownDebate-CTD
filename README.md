@@ -2,6 +2,8 @@
 
 Adversarial token-economy debate for inference-time compute experiments.
 
+VIDEO LINK https://streamable.com/m28985
+
 ## What It Does
 
 - Runs two debaters against each other across one or many rounds.
