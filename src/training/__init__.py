@@ -1,4 +1,4 @@
-"""Training pipeline skeleton interfaces and contracts."""
+"""Training pipeline interfaces, contracts, and QLoRA trainer."""
 
 from .checkpoint_registry import (
     CheckpointRecord,

@@ -1,17 +1,63 @@
 # Core Concept: Adversarial Token-Economy Debate
 
-## The Big Idea
+## Goals
 
-This project is an experimental environment for selecting better reasoning behavior under scarcity.
+This project serves two complementary research goals:
 
-Two debaters argue across many rounds. Every meaningful action consumes tokens. Better judged arguments earn tokens. The system is meant to test whether economic pressure produces:
-- better allocation of inference-time compute,
-- more adaptive strategic behavior over time,
-- and more compressed internal reasoning traces.
+### 1. Train a Competitive Model at Lower Cost
+
+Use adversarial debate under economic pressure to generate high-quality training data. The pipeline:
+
+1. Small models debate under token scarcity, producing reasoning traces
+2. Economic and evolutionary pressure selects for better strategies (survivors, winners, adapted behaviors)
+3. Winning traces are exported as SFT examples and preference pairs
+4. A student model is fine-tuned on this data to approximate frontier-quality reasoning at lower inference cost
+
+The hypothesis is that scarcity-selected reasoning traces carry more signal per token than unconstrained generation — models forced to budget their thinking produce more focused, higher-quality arguments.
+
+**Current state:** Steps 1-3 exist in code. Step 4 (actual training loop and evaluation of the trained model) is not yet implemented.
+
+### 2. Observe Emergent Strategic Behavior
+
+Rather than programming models to be strategic, this project creates an environment where strategic behavior may emerge from economic incentives. Key questions:
+
+- Do models learn to allocate compute differently under budget pressure?
+- Does adaptation after loss emerge without explicit instruction?
+- Do models develop different strategies for different topic types?
+- Does cross-round memory produce measurable behavioral shifts?
+
+Early evidence: after implementing the "Wallet Phase" (forcing models to authorize budgets before generation), economy-related mentions in `<thinking>` tags increased from 1 to 8 per match. ADAPT_ON_LOSS directives show +0.020 adaptation gain — small but measurably positive.
+
+## Design Philosophy
+
+### Non-Arbitrariness
+
+Every mechanism in the system should be grounded in a real-world principle, not invented as an ad hoc fix:
+
+| Mechanism | Grounding | Why it's not arbitrary |
+|-----------|-----------|----------------------|
+| Token budgets | Economics: allocation under scarcity | Models face real resource constraints, not artificial turn limits |
+| Betting with fees | Market microstructure: transaction costs | Fees create negative EV for uninformed aggression, rewarding edge-aware betting |
+| Kelly criterion sizing | Information theory: optimal growth rate | Bet sizes scale with estimated edge, not fixed amounts |
+| Multi-dimension judging | Evaluation theory: construct validity | Accuracy/responsiveness/development each measure distinct argument qualities |
+| Scaling iteration fees | Mechanism design: termination incentives | Later iterations cost more, naturally encouraging convergence |
+| Bankruptcy elimination | Evolution: selection pressure | Unfit strategies are removed, not penalized with arbitrary score deductions |
+| Confidence-proportional payout | Pari-mutuel markets | Winner's share reflects judge confidence, not a fixed prize |
+
+**Non-arbitrariness audit — current gaps:**
+
+- `token_cost_ratio` (20:1 LLM tokens to economic tokens) is a tuning parameter without principled derivation. It works but should ideally be calibrated from empirical cost curves.
+- Judge confidence clamping (5-95%) is a practical guard against extreme volatility. The range itself is somewhat arbitrary — a more principled approach would derive bounds from observed judge noise.
+- `max_iterations` is a hard cap that prevents infinite loops but doesn't emerge from the economics. The scaling fees should theoretically handle termination pressure, but the hard cap remains as a safety net.
+- The `split_pot_enabled` initial bounty is a design choice to prevent zero-payout early rounds. Its amount and existence are configurable but not derived from theory.
+
+### Emergent Over Prescribed
+
+When behavior is degenerate, the first question is: **is the evaluation signal or incentive structure broken?**
+
+Example: when Beta won a tournament by doing nothing (all deliberations failed validation, defaulted to free PASS, conserved tokens while Alpha went bankrupt), the fix was not a PASS penalty. The fix was multi-dimension scoring where passivity naturally scores low on responsiveness and development dimensions. The judge became smarter, not the rules more restrictive.
 
 ## Theoretical Framing
-
-This project intentionally mirrors ideas from economics, evolution, and thermodynamics.
 
 ### Economics
 - Tokens are a scarce budget.
@@ -23,6 +69,7 @@ This project intentionally mirrors ideas from economics, evolution, and thermody
 - Tournament persistence creates selection pressure over policies, not just one-shot outputs.
 - Agents that allocate compute better should survive longer and accumulate more balance.
 - Pass/respond behavior, budget control, and adaptation after loss become selection signals.
+- Evolutionary campaigns mutate strategy profiles and select winners across generations.
 
 ### Thermodynamics (Analogy)
 - Tokens are available energy for cognitive work.
@@ -30,16 +77,7 @@ This project intentionally mirrors ideas from economics, evolution, and thermody
 - Fees are friction (dissipation) that penalizes random action.
 - Balance depletion and bankruptcy represent irreversible loss of usable budget.
 
-The analogy is descriptive, not a physical claim, but it provides useful invariants:
-- no free work,
-- explicit energy accounting,
-- and path-dependent survival dynamics.
-
-## Design Philosophy
-
-Emergent over prescribed.
-
-The project prefers improving environment incentives and evaluation quality over hardcoded behavior rules. If behavior is degenerate, first ask whether the judge/economy signal is too noisy or gameable, instead of adding arbitrary penalties.
+The analogy is descriptive, not a physical claim, but it provides useful invariants: no free work, explicit energy accounting, and path-dependent survival dynamics.
 
 ## Current Decision Model
 
@@ -48,89 +86,53 @@ Debater deliberation outputs a structured decision:
 - `PASS`: skip action this iteration.
 
 Each deliberation also includes:
-- `amount`: stake size,
-- `max_budget`: maximum authorized economic tokens for the upcoming generation.
+- `amount`: stake size
+- `max_budget`: maximum authorized economic tokens for the upcoming generation
 
-`max_budget` is converted into a hard generation token cap (`max_tokens`) in runtime.
+`max_budget` is converted into a hard generation token cap (`max_tokens`) at runtime. This is the "Wallet Phase" — models must explicitly authorize spending before they can generate.
 
-## Round Flow (Current)
+## Round Flow
 
 ```text
 Round N:
 1. Generate initial arguments (cost deducted by LLM token usage).
-2. Judge initial arguments and output confidences.
-3. Optional initial bounty split (`split_pot_enabled`).
+2. Judge initial arguments (multi-dimension: accuracy/responsiveness/development).
+3. Optional initial bounty split (split_pot_enabled).
 4. Iterative loop:
-   - each debater chooses RESPOND or PASS (with wallet budget authorization),
+   - each debater deliberates with <thinking> and chooses RESPOND or PASS,
    - deliberation cost is deducted,
-   - RESPOND may call search and then generate under `max_budget`,
-   - judge re-evaluates.
-5. Terminate on mutual PASS, bankruptcy condition, or max iterations.
-6. Distribute pot by final confidence, resolve bets, log transcript and ledger.
+   - RESPOND: bet placed (stake + fee), optional search, generate under max_budget cap,
+   - judge re-evaluates with comparative context (sees prior judgment),
+   - observers track metrics.
+5. Terminate on mutual PASS, bankruptcy, or max iterations.
+6. Distribute pot by final confidence, resolve bets (sqrt convex reward curve), log transcript and ledger.
+7. Audit round accounting (minted - burned == supply delta).
 ```
 
 ## Information Asymmetry
 
 Debaters see:
-- topic,
-- arguments,
-- confidence scores,
-- own balance and balance delta.
+- topic, arguments, confidence scores, own balance and balance delta
 
 Debaters do not see:
-- judge internal reasoning prompt,
-- opponent private `<thinking>`,
-- opponent balance.
+- judge internal reasoning prompt, opponent private `<thinking>`, opponent balance
 
-This is intended to reduce direct judge-pandering and preserve strategic uncertainty.
-
-## Economy Mechanics (Current)
-
-- LLM token usage maps to economic cost through `token_cost_ratio` (default 20:1).
-- Deliberation, generation, summarization, and search all consume budget.
-- Iteration fee scales as `min(0.05 * iteration, 0.50)`.
-- Pot split is confidence-proportional (`tokens_per_round + locked_bets`).
-- Optional split-pot initial bounty gives early non-zero payout.
-- EV guard can conservatively override pathological bets in low-edge states.
-
-## Architecture
-
-Core runtime path:
-- `src/arena/dynamic_round.py` for iterative round execution.
-- `src/models/debater.py` for deliberation, wallet budget, and generation.
-- `src/models/judge.py` for single/ensemble/consensus judging.
-- `src/economy/*` for ledger, bets, and distribution.
-- `src/logs/transcript.py` and `src/analysis/*` for evidence artifacts.
-
-## System Contracts
-
-Structured validation at LLM boundary:
-- `JudgmentResponse`: validates confidences in `[0,1]`, normalizes to sum 1.0.
-- `DeliberationResponse`: validates `decision in {RESPOND, PASS}`, `amount >= 0`, `max_budget >= 0`.
-
-Validation failures do not silently become tie judgments.
-
-## Implemented Capabilities
-
-- Dynamic rounds with mutual-pass termination.
-- Wallet phase (`max_budget`) threaded into generation hard cap.
-- Deliberation token cost accounting.
-- Optional search tool usage with explicit token cost.
-- Self-summarization memory with explicit token cost.
-- Multi-dimension judging and randomized argument order support.
-- Strict runtime preflight and judge variance gating in tournament runs.
-- Selection health dashboard and trajectory parsing tooling.
+This preserves strategic uncertainty and reduces direct judge-pandering.
 
 ## Known Gaps and Risks
 
-- Reasoning-quality trajectory metrics exist but need stronger longitudinal validation.
-- Judge quality still determines whether economic signal is learnable or noisy.
-- Some docs/configs can drift quickly as economics are tuned.
-- Debt and elimination semantics need single-source clarity across prompt text and runtime checks.
+- **No training loop.** Training data is generated but no fine-tuning or evaluation pipeline exists yet.
+- **No NPU runtime.** Intel NPU is a target but has zero implementation.
+- **Judge quality determines everything.** If judge signal is noisy, economic optimization is optimizing noise. The 7b judge (stdev=0.024) is research-grade; the 1.5b judge (stdev=0.141) is not.
+- **Token-cost ratio portability** across models/backends is weakly grounded.
+- **Trajectory parsing** uses fragile emoji-based markdown splitting.
+- **Pass rate too high** (0.83 observed vs ~0.35 target). Models still PASS too aggressively — an economy pressure tuning problem.
 
 ## Roadmap
 
-1. Ground-truth calibration topics for judge validity checks.
-2. Stronger trajectory metrics for internal reasoning compression/synthesis over time.
-3. Economic parameter derivation from explicit runway targets, not ad hoc constants.
-4. Arena progression (tiering/ranking) only after evidence quality stabilizes.
+1. Close the training loop — consume generated SFT/preference data, fine-tune a student model, evaluate against baseline.
+2. Validate that economic pressure actually produces better training signal than unconstrained debate.
+3. Reduce pass rate through economy pressure tuning (not arbitrary penalties).
+4. Strengthen trajectory metrics for internal reasoning quality measurement.
+5. Add NPU runtime path for cost-effective inference.
+6. Scale to population tournaments (multi-model Swiss/challenger scheduling).

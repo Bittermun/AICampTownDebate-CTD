@@ -29,6 +29,8 @@ class BetDecision:
     llm_tokens_used: int = 0  # Tokens consumed by deliberation LLM call
     max_budget: float = 30.0  # Max economic tokens to spend on generation
     use_search: bool = False  # Whether the model opted in to pay for a web search
+    search_query: str | None = None  # Custom search query (model-specified)
+    pass_statement: str | None = None  # Brief statement when HOLDing (visible to judge)
     intent: str = "other"
     intent_mix: list[dict] | None = None
     rule_refs_used: list[str] | None = None
@@ -451,64 +453,6 @@ class Debater:
             llm_tokens_used=result.tokens_used,
         )
 
-    def generate_research(
-        self,
-        topic: str,
-        round_id: int,
-        own_argument: str,
-        current_balance: Optional[float] = None,
-        confidence_self: Optional[float] = None,
-        confidence_opponent: Optional[float] = None,
-    ) -> Argument:
-        """Generate a factual research-based response.
-        
-        Model is encouraged to provide evidence and citations.
-        """
-        # Research is a COSTLY strategic action. Frame it economically, not academically.
-        tournament_facts = [
-            "TOURNAMENT: This is one round of many. Tokens persist across rounds.",
-            "ELIMINATION: Balance <= 0 = disqualified.",
-        ]
-        if current_balance is not None:
-            tournament_facts.append(f"BALANCE: {current_balance:.0f} tokens. You paid to search - make it count.")
-        if confidence_self is not None and confidence_opponent is not None:
-            tournament_facts.append(f"STANDING: You={confidence_self:.0%} vs Opponent={confidence_opponent:.0%}")
-        tournament_facts.append("OBJECTIVE: Your research must shift the judge enough to recoup your search cost. Be decisive.")
-
-        economy_info = "\n\n=== SITUATION ===\n" + "\n".join(tournament_facts)
-        system = (
-            "You are a debate researcher under economic constraints. Provide the most judge-persuasive "
-            "evidence. Conciseness matters - verbosity costs tokens."
-        ) + economy_info
-
-        research_prompt = f"""Topic: {topic}
-Your current position:
-{own_argument[:500]}
-
-TASK: Provide the most decisive factual evidence or refutation to shift the judge in your favor.
-Be specific and cite-worthy. You may use <thinking></thinking> to plan which angle has highest impact.
-
-Research synthesis:"""
-
-        result = self._generate(research_prompt, system=system, max_tokens=400)
-        
-        # Extract thinking
-        thinking = ""
-        text = result.text
-        thinking_match = re.search(r'<thinking>(.*?)</thinking>', text, re.DOTALL)
-        if thinking_match:
-            thinking = thinking_match.group(1).strip()
-            text = re.sub(r'<thinking>.*?</thinking>', '', text, flags=re.DOTALL).strip()
-
-        return Argument(
-            content=text,
-            debater_id=self.name,
-            round_id=round_id,
-            is_counter=True,
-            llm_tokens_used=result.tokens_used,
-            thinking=thinking
-        )
-    
 
     def summarize_position(self, full_history: str) -> PositionSummary:
         """
@@ -554,15 +498,17 @@ Research synthesis:"""
         current_fee_rate: float = 0.05,
         last_judgment_reasoning: Optional[str] = None,
         balance_history: Optional[list] = None,  # Past balance values for trend signal
+        tokens_per_round: float = 60.0,
+        exponent: float = 2.0,
     ) -> BetDecision:
         """
         LLM-driven deliberation: model decides whether to RESPOND or HOLD.
         Returns BetDecision with type, amount, and reasoning.
         confidence_self/opponent are judge scores (debaters see scores but not reasoning).
         """
-        # Cannot bet if balance too low
-        if balance <= 20:
-            return BetDecision(bet_type=BetType.PASS, amount=0, reasoning="Balance too low to bet.", action_label="HOLD")
+        # Cannot bet if balance insufficient for minimum viable action
+        if balance <= self.config.low_balance_bet_cap:
+            return BetDecision(bet_type=BetType.PASS, amount=0, reasoning=f"Balance ({balance:.0f}) below minimum viable bet.", action_label="HOLD")
         
         # For stub mode, use heuristic fallback
         if self._backend == "stub":
@@ -595,7 +541,8 @@ Research synthesis:"""
             )
         
         # LLM-driven deliberation prompt (facts only, no strategy hints)
-        max_bet = min(20, balance * 0.3)
+        # Max bet scales with balance via kelly_cap (principled: fraction of bankroll)
+        max_bet = min(balance * self.config.kelly_cap, balance * 0.3)
         
         feedback_str = ""
         if balance_change is not None and balance_change < 0:
@@ -618,16 +565,44 @@ Research synthesis:"""
             if pb:
                 playbook_line = f"\n\nPLAYBOOK (your past rounds):\n{pb}"
                 
+        # Calculate example exponential payout for 60/40 win to give concrete edge example
+        c_a, c_b = 0.6, 0.4
+        tot_exp = (c_a ** exponent) + (c_b ** exponent)
+        if tot_exp > 0:
+            ex_earn = tokens_per_round * ((c_a ** exponent) / tot_exp)
+            ex_opp  = tokens_per_round * ((c_b ** exponent) / tot_exp)
+        else:
+            ex_earn = tokens_per_round / 2.0
+            ex_opp  = tokens_per_round / 2.0
+            
+        exponent_str = f"^{exponent:g}" if exponent != 1.0 else ""
+        pot_info = (
+            f"\n- Round pot: {tokens_per_round:.0f} tokens available. Payout = pot × (score{exponent_str} / total_score{exponent_str}).\n"
+            f"  Example: score 60/40 → you earn {ex_earn:.0f} tokens, opponent earns {ex_opp:.0f}."
+        )
+
         rules_view = self._rule_view_text("deliberation_compact")
         rules_block = f"\n\nRULE CARD:\n{rules_view}" if rules_view else ""
+        # --- Deliberation prompt v2 (2026-03-06) ---
+        # Changes from v1:
+        #   1. Expose token_cost_ratio so AI can compute exact generation cost:
+        #      max_budget (balance tokens) = LLM output tokens / token_cost_ratio.
+        #      Previously said "variable based on response length" — AI could not calculate.
+        #   2. Inform AI that this deliberation itself already cost balance tokens.
+        #      Previously AI believed HOLD was completely free; deliberation_cost is charged
+        #      at the same 20:1 ratio before any decision is made.
+        #   3. Clarify max_budget units: labelled "balance tokens to spend on generation"
+        #      (not "max tokens for your response" which implied LLM output tokens).
         deliberation_prompt = f"""CONTEXT:
 - This is one round of many. Tokens persist.
 - Balance ≤ 0 = eliminated.
+- Cost rate: every 20 LLM output tokens = 1 balance token deducted.
+  Note: this deliberation (your current thinking) already cost you ~2-5 balance tokens.
 
 STATUS:
-- Balance: {balance:.0f} tokens{feedback_str}
+- Balance: {balance:.0f} tokens (after deliberation cost already deducted){feedback_str}
 - Standing: You={confidence_self:.0%} vs Other AI={confidence_opponent:.0%}
-- Costs: Variable based on response length. Current fee: {current_fee_rate:.0%}.
+- Costs: Current fee: {current_fee_rate:.0%} on bet stake. Generation: 1 balance token per 20 output tokens.{pot_info}
 - Objective: maximize expected final balance over the tournament.{judgment_line}{trend_line}{playbook_line}
 
 Your statement (opening + close):
@@ -636,33 +611,40 @@ Your statement (opening + close):
 Other AI's statement:
 {opponent_argument[:300]}
 
-OPTIONS: RESPOND | HOLD
+You have exactly TWO choices:
+  RESPOND = spend tokens to argue (you MUST bet amount > 0)
+  HOLD = stay silent this turn (saves bet stake+fee, but deliberation already spent)
 
 THINK FIRST in <thinking> tags. Reason about your ECONOMIC situation:
-- How many tokens can you afford to spend?
-- Is expected value positive after fee and generation cost?
-- What is the minimum effective response?
-- Is search worth paying for in this spot? (use_search=true has extra token cost)
+- You already spent ~2-5 balance tokens just deliberating. Factor this in.
+- If max_budget=30, your response will cost ~30 balance tokens in generation fees.
+- Is (pot share earned) > (bet stake + fee + generation cost) given your confidence?
+- What is the minimum effective response (lower max_budget = lower cost)?
+- Web search costs ~5-15 extra tokens but lets you find real evidence. Set use_search=true and write a specific search_query.
 - How confident are you in winning the overall debate?
 - Given your max_bet limit ({max_bet:.0f}), what specific integer amount of tokens will you wager to back your argument? (0 is safe but yields no reward, {max_bet:.0f} is aggressive).
 
-Then respond JSON:
+Then respond with ONLY this JSON (no other text after):
 {{
   "reasoning": "...",
   "rationale_short": "...",
-  "decision": "RESPOND|HOLD",
-  "action": "RESPOND|HOLD",
+  "decision": "RESPOND or HOLD",
+  "action": "RESPOND or HOLD",
   "intent": "claim|investigate|challenge|revise|other",
   "intent_mix": [{{"intent": "claim", "weight": 1.0}}],
   "rule_refs_used": ["R_BANKRUPTCY"],
-  "amount": 0-{max_bet:.0f},
-  "max_budget": 10-50,
-  "use_search": true|false
+  "amount": 0,
+  "max_budget": 30,
+  "use_search": false,
+  "search_query": null,
+  "pass_statement": null
 }}
 
-amount = integer from 0 to {max_bet:.0f}. This is your token wager. Higher wager = higher potential payout but greater bankruptcy risk.
-max_budget = maximum tokens you authorize spending on your response. Lower = cheaper but shorter.
-use_search = whether to pay for a web search to support your argument (costs extra tokens).{rules_block}"""
+decision/action: write exactly "RESPOND" or "HOLD" — no other value accepted.
+amount = integer 0 to {max_bet:.0f}. Your wager. Higher = more risk + more reward.
+max_budget = balance tokens to spend on generation (10-50). Each unit = 20 LLM output tokens. Lower = cheaper.
+use_search = true to pay ~5-15 tokens for web search. Write search_query if true.
+pass_statement = if HOLD, briefly state your reason (judge sees this, no extra cost).{rules_block}"""
 
         system = "Think step-by-step in <thinking> tags, then output valid JSON only."
         
@@ -743,6 +725,8 @@ use_search = whether to pay for a web search to support your argument (costs ext
                 amount = min(parsed.amount, balance * 0.3, 20)
             max_budget = parsed.max_budget
             use_search = parsed.use_search
+            search_query = parsed.search_query if use_search else None
+            pass_statement = parsed.pass_statement
             intent = (parsed.intent or "other").lower()
             intent_mix = parsed.intent_mix
             rule_refs_used = parsed.rule_refs_used
@@ -759,6 +743,7 @@ use_search = whether to pay for a web search to support your argument (costs ext
                     reasoning=full_reasoning,
                     llm_tokens_used=llm_tokens_used,
                     max_budget=0.0,
+                    pass_statement=pass_statement,
                     intent=intent,
                     intent_mix=intent_mix,
                     rule_refs_used=rule_refs_used,
@@ -773,6 +758,7 @@ use_search = whether to pay for a web search to support your argument (costs ext
                     llm_tokens_used=llm_tokens_used,
                     max_budget=max_budget,
                     use_search=use_search,
+                    search_query=search_query,
                     intent=intent,
                     intent_mix=intent_mix,
                     rule_refs_used=rule_refs_used,
@@ -793,10 +779,10 @@ use_search = whether to pay for a web search to support your argument (costs ext
                         edge = max(0.0, confidence_hint - 0.5)
                         kelly_f = edge * self.config.kelly_scale
                         kelly_amount = kelly_f * balance
-                        amount = min(kelly_amount, self.config.kelly_cap * balance, balance * 0.3, 20)
+                        amount = min(kelly_amount, self.config.kelly_cap * balance, balance * 0.3)
                         amount = max(amount, 1.0)
                     else:
-                        amount = min(parsed.amount, balance * 0.3, 20)
+                        amount = min(parsed.amount, balance * 0.3)
                     max_budget = parsed.max_budget
                     use_search = parsed.use_search
                     intent = (parsed.intent or "other").lower()

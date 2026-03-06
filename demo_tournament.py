@@ -48,7 +48,16 @@ def main() -> int:
     )
     parser.add_argument("--variance-runs", type=int, default=10)
     parser.add_argument("--max-judge-stdev", type=float, default=0.05)
-    parser.add_argument("--min-judge-mean-a", type=float, default=0.55)
+    parser.add_argument(
+        "--min-judge-mean-a",
+        type=float,
+        default=None,
+        help=(
+            "Optional: require judge mean(confidence_A) >= this threshold. "
+            "Only meaningful when argument_a is a known-stronger calibration probe. "
+            "Defaults to None (disabled) — fair judges score ~0.5 on symmetric arguments."
+        ),
+    )
     parser.add_argument(
         "--seed",
         type=int,
@@ -73,6 +82,18 @@ def main() -> int:
         help="Run fixed-case calibration gate before tournament and abort on failure",
     )
     parser.add_argument("--min-calibration-pass-rate", type=float, default=0.67)
+    parser.add_argument(
+        "--playbook-a",
+        type=str,
+        default=None,
+        help="Load a saved playbook JSON for Debater A (veteran experiment)",
+    )
+    parser.add_argument(
+        "--playbook-b",
+        type=str,
+        default=None,
+        help="Load a saved playbook JSON for Debater B (veteran experiment)",
+    )
     args = parser.parse_args()
 
     if args.seed is not None:
@@ -170,7 +191,15 @@ def main() -> int:
         multi_agent_max_tokens=cfg.debaters[1].multi_agent_max_tokens,
         multi_agent_min_balance=cfg.debaters[1].multi_agent_min_balance,
     ))
-    
+
+    # Load veteran playbooks if provided
+    if args.playbook_a:
+        debater_a.memory.load(args.playbook_a)
+        print(f"  Loaded veteran playbook for A: {len(debater_a.memory.entries)} rounds, {debater_a.memory.win_rate:.0%} win rate")
+    if args.playbook_b:
+        debater_b.memory.load(args.playbook_b)
+        print(f"  Loaded veteran playbook for B: {len(debater_b.memory.entries)} rounds, {debater_b.memory.win_rate:.0%} win rate")
+
     # Create judge(s) from config
     if cfg.judge_type == "consensus" and len(cfg.judges) > 1:
         sub_judges = []

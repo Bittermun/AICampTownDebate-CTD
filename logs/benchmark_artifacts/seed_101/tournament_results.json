@@ -12,11 +12,39 @@
       "confidence_b": 0.5,
       "tokens_a": 85.0,
       "tokens_b": 85.0,
-      "bets": 0
+      "gen_cost_a": 0.0,
+      "gen_cost_b": 0.0,
+      "bets": 0,
+      "bet_status_counts": {
+        "pending": 0,
+        "won": 0,
+        "lost": 0,
+        "cancelled": 0
+      },
+      "bets_pending": 0
     }
   ],
+  "learning_curve": {
+    "a_efficiency_per_round": [
+      0
+    ],
+    "b_efficiency_per_round": [
+      0
+    ],
+    "a_early_avg": 0.0,
+    "a_late_avg": 0,
+    "a_improvement": 0.0,
+    "b_early_avg": 0.0,
+    "b_late_avg": 0,
+    "b_improvement": 0.0
+  },
   "final_balances": {
     "Debater_Alpha": 435.0,
     "Debater_Beta": 435.0
-  }
+  },
+  "eliminated": null,
+  "early_stop_reason": null,
+  "winner": "Debater_Beta",
+  "playbook_a": "logs\\benchmark_artifacts\\seed_101\\playbooks\\Debater_Alpha_playbook.json",
+  "playbook_b": "logs\\benchmark_artifacts\\seed_101\\playbooks\\Debater_Beta_playbook.json"
 }

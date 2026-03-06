@@ -108,7 +108,14 @@ class DynamicRoundResult:
     all_bets: List[Bet] = field(default_factory=list)
     all_counters: List[Argument] = field(default_factory=list)
     observation_reports: List = field(default_factory=list)  # ObservationReport list
-    
+    gen_cost_a: float = 0.0
+    gen_cost_b: float = 0.0
+    bet_count_a: int = 0
+    bet_count_b: int = 0
+    pass_count_a: int = 0
+    pass_count_b: int = 0
+    confidence_trajectory: List[tuple] = field(default_factory=list)
+
     @property
     def judgment(self) -> Judgment:
         """For backwards compatibility."""
@@ -207,11 +214,19 @@ class DynamicDebateRound:
         
         # Phase 2b: Initial Bounty Distribution (if split pot enabled)
         if self.split_pot_enabled and self.initial_pot_amount > 0:
-            # Calculate split based on initial confidence
+            # Calculate split based on initial confidence using exponential curve
             total_conf = ctx.initial_judgment.confidence_a + ctx.initial_judgment.confidence_b
             if total_conf > 0:
-                tokens_a = self.initial_pot_amount * (ctx.initial_judgment.confidence_a / total_conf)
-                tokens_b = self.initial_pot_amount * (ctx.initial_judgment.confidence_b / total_conf)
+                exp = getattr(self.distributor, 'exponent', 1.0)
+                ca_exp = ctx.initial_judgment.confidence_a ** exp
+                cb_exp = ctx.initial_judgment.confidence_b ** exp
+                tot_exp = ca_exp + cb_exp
+                if tot_exp > 0:
+                    tokens_a = self.initial_pot_amount * (ca_exp / tot_exp)
+                    tokens_b = self.initial_pot_amount * (cb_exp / tot_exp)
+                else:
+                    tokens_a = self.initial_pot_amount / 2
+                    tokens_b = self.initial_pot_amount / 2
             else:
                 tokens_a = self.initial_pot_amount / 2
                 tokens_b = self.initial_pot_amount / 2
@@ -412,6 +427,8 @@ class DynamicDebateRound:
                 current_fee_rate=current_fee_rate,
                 last_judgment_reasoning=ctx.current_judgment.reasoning if ctx.current_judgment else None,
                 balance_history=getattr(ctx, '_bal_hist_a', None),
+                tokens_per_round=self.distributor.tokens_per_round,
+                exponent=getattr(self.distributor, 'exponent', 1.0),
             )
             
             ctx.decision_b = self.debater_b.decide_bet(
@@ -424,6 +441,8 @@ class DynamicDebateRound:
                 current_fee_rate=current_fee_rate,
                 last_judgment_reasoning=ctx.current_judgment.reasoning if ctx.current_judgment else None,
                 balance_history=getattr(ctx, '_bal_hist_b', None),
+                tokens_per_round=self.distributor.tokens_per_round,
+                exponent=getattr(self.distributor, 'exponent', 1.0),
             )
             
             # Deduct deliberation costs (thinking is not free!)
@@ -507,9 +526,26 @@ class DynamicDebateRound:
             # Track pass counts for non-mutual PASS
             if ctx.decision_a.bet_type == BetType.PASS:
                 ctx.pass_count_a += 1
+                # Append pass statement to combined args so judge can see it
+                if ctx.decision_a.pass_statement:
+                    ctx.combined_a += f"\n\n[HOLD iter={ctx.iteration}] {ctx.decision_a.pass_statement}"
+                    if transcript:
+                        transcript.add_argument(
+                            self.debater_a.name,
+                            f"[HOLD] {ctx.decision_a.pass_statement}",
+                            is_counter=False, tokens_bet=0
+                        )
             if ctx.decision_b.bet_type == BetType.PASS:
                 ctx.pass_count_b += 1
-            
+                if ctx.decision_b.pass_statement:
+                    ctx.combined_b += f"\n\n[HOLD iter={ctx.iteration}] {ctx.decision_b.pass_statement}"
+                    if transcript:
+                        transcript.add_argument(
+                            self.debater_b.name,
+                            f"[HOLD] {ctx.decision_b.pass_statement}",
+                            is_counter=False, tokens_bet=0
+                        )
+
             # Process bets for active participants
             if ctx.decision_a.bet_type != BetType.PASS:
                 ctx = self._process_bet(ctx, transcript, is_debater_a=True)
@@ -672,7 +708,7 @@ class DynamicDebateRound:
             research_context = None
             if decision.use_search:
                 tool = get_research_tool()
-                search_query = f"{ctx.topic} {decision.reasoning[:50]}"
+                search_query = decision.search_query or f"{ctx.topic} {decision.reasoning[:50]}"
                 search_result = tool.search(search_query)
                 research_context = search_result.summary
                 # Deduct dynamic search tool cost
@@ -848,4 +884,11 @@ class DynamicDebateRound:
             all_bets=ctx.all_bets,
             all_counters=ctx.all_counters,
             observation_reports=observation_reports or [],
+            gen_cost_a=ctx.gen_cost_a,
+            gen_cost_b=ctx.gen_cost_b,
+            bet_count_a=ctx.bet_count_a,
+            bet_count_b=ctx.bet_count_b,
+            pass_count_a=ctx.pass_count_a,
+            pass_count_b=ctx.pass_count_b,
+            confidence_trajectory=ctx.confidence_trajectory,
         )

@@ -127,6 +127,11 @@ class OpenAICompatBackend:
         json_mode: bool,
         temperature: float,
     ) -> dict:
+        is_groq = "groq.com" in self.config.base_url.lower()
+        
+        if is_groq and max_tokens < 1024:
+            max_tokens = 2048
+            
         payload = {
             "model": self.config.model,
             "messages": ([{"role": "system", "content": system}] if system else [])
@@ -135,7 +140,13 @@ class OpenAICompatBackend:
             "temperature": temperature,
             "stream": False,
         }
-        if json_mode:
+        if is_groq and ("qwen" in self.config.model.lower() or "qwq" in self.config.model.lower() or "deepseek" in self.config.model.lower()):
+            # Disable hybrid chain-of-thought mode so output is always
+            # clean JSON (no <think> tags) and latency is predictable.
+            payload["reasoning_effort"] = "none"
+        # Allow any endpoint to opt out of response_format via env var
+        no_json_mode = os.environ.get("OPENAI_COMPAT_NO_JSON_MODE", "").lower() in ("1", "true", "yes")
+        if json_mode and not is_groq and not no_json_mode:
             payload["response_format"] = {"type": "json_object"}
         return payload
 
@@ -169,26 +180,54 @@ class OpenAICompatBackend:
         return GenerationResult(text=text, tokens_used=tokens_used)
 
     def _post_sync(self, payload: dict) -> GenerationResult:
+        max_retries = 6
+        base_delay = 2.0
+
         for url in self._chat_url_candidates():
-            try:
-                resp = self._session.post(
-                    url,
-                    json=payload,
-                    headers=self._headers(),
-                    timeout=self.config.timeout,
-                )
-                if resp.status_code in (404, 405):
-                    continue
-                data = resp.json()
-                parsed = self._parse_generation_payload(data)
-                if parsed.text.startswith("[OPENAI_COMPAT_ERROR]") and resp.status_code in (404, 405):
-                    continue
-                return parsed
-            except Exception as exc:
-                err = str(exc)
-                if "404" in err:
-                    continue
-                return GenerationResult(text=f"[OPENAI_COMPAT_ERROR] {exc}", tokens_used=0)
+            for attempt in range(max_retries):
+                try:
+                    resp = self._session.post(
+                        url,
+                        json=payload,
+                        headers=self._headers(),
+                        timeout=self.config.timeout,
+                    )
+                    if resp.status_code == 429:
+                        retry_after = resp.headers.get("retry-after")
+                        if retry_after and retry_after.replace(".", "").isdigit():
+                            wait_time = float(retry_after)
+                        else:
+                            wait_time = base_delay * (1.5 ** attempt)
+                        print(f"[{self.config.model}] 429 Rate limit, sleeping {wait_time:.1f}s...")
+                        time.sleep(wait_time)
+                        continue
+                    
+                    if resp.status_code in (404, 405):
+                        break  # Try next URL candidate
+                    
+                    data = resp.json()
+                    if "error" in data and resp.status_code != 200:
+                        # Groq sometimes returns 400 for rate limit details unfortunately in the body
+                        err_msg = str(data.get("error", {}).get("message", "")).lower()
+                        if "rate limit" in err_msg or "please try again in" in err_msg:
+                            import re
+                            m = re.search(r"please try again in ([0-9.]+)s", err_msg)
+                            wait_time = float(m.group(1)) if m else base_delay * (1.5 ** attempt)
+                            print(f"[{self.config.model}] 400 Rate limit body, sleeping {wait_time:.1f}s...")
+                            time.sleep(wait_time)
+                            continue
+                            
+                    parsed = self._parse_generation_payload(data)
+                    if parsed.text.startswith("[OPENAI_COMPAT_ERROR]") and resp.status_code in (404, 405):
+                        break
+                    return parsed
+                except Exception as exc:
+                    err = str(exc)
+                    if "404" in err:
+                        break
+                    return GenerationResult(text=f"[OPENAI_COMPAT_ERROR] {exc}", tokens_used=0)
+            # If we exhausted retries on this URL, move to the next URL or fail
+            return GenerationResult(text=f"[OPENAI_COMPAT_ERROR] Exhausted retries (429)", tokens_used=0)
 
         self._availability_cached = False
         self._availability_checked_at = time.monotonic()
@@ -197,30 +236,57 @@ class OpenAICompatBackend:
     async def _post_async(self, payload: dict) -> GenerationResult:
         try:
             import aiohttp
+            import asyncio
         except ImportError:
             return self._post_sync(payload)
 
+        max_retries = 6
+        base_delay = 2.0
         timeout = aiohttp.ClientTimeout(total=self.config.timeout)
+
         for url in self._chat_url_candidates():
-            try:
-                async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.post(
-                        url,
-                        json=payload,
-                        headers=self._headers(),
-                    ) as resp:
-                        if resp.status in (404, 405):
-                            continue
-                        data = await resp.json()
-                        parsed = self._parse_generation_payload(data)
-                        if parsed.text.startswith("[OPENAI_COMPAT_ERROR]") and resp.status in (404, 405):
-                            continue
-                        return parsed
-            except Exception as exc:
-                err = str(exc)
-                if "404" in err:
-                    continue
-                return GenerationResult(text=f"[ASYNC_OPENAI_COMPAT_ERROR] {exc}", tokens_used=0)
+            for attempt in range(max_retries):
+                try:
+                    async with aiohttp.ClientSession(timeout=timeout) as session:
+                        async with session.post(
+                            url,
+                            json=payload,
+                            headers=self._headers(),
+                        ) as resp:
+                            if resp.status == 429:
+                                retry_after = resp.headers.get("retry-after")
+                                if retry_after and retry_after.replace(".", "").isdigit():
+                                    wait_time = float(retry_after)
+                                else:
+                                    wait_time = base_delay * (1.5 ** attempt)
+                                print(f"[{self.config.model}] 429 Rate limit, sleeping {wait_time:.1f}s...")
+                                await asyncio.sleep(wait_time)
+                                continue
+
+                            if resp.status in (404, 405):
+                                break
+
+                            data = await resp.json()
+                            if "error" in data and resp.status != 200:
+                                err_msg = str(data.get("error", {}).get("message", "")).lower()
+                                if "rate limit" in err_msg or "please try again in" in err_msg:
+                                    import re
+                                    m = re.search(r"please try again in ([0-9.]+)s", err_msg)
+                                    wait_time = float(m.group(1)) if m else base_delay * (1.5 ** attempt)
+                                    print(f"[{self.config.model}] 400 Rate limit body, sleeping {wait_time:.1f}s...")
+                                    await asyncio.sleep(wait_time)
+                                    continue
+                            
+                            parsed = self._parse_generation_payload(data)
+                            if parsed.text.startswith("[OPENAI_COMPAT_ERROR]") and resp.status in (404, 405):
+                                break
+                            return parsed
+                except Exception as exc:
+                    err = str(exc)
+                    if "404" in err:
+                        break
+                    return GenerationResult(text=f"[ASYNC_OPENAI_COMPAT_ERROR] {exc}", tokens_used=0)
+            return GenerationResult(text=f"[OPENAI_COMPAT_ERROR] Exhausted retries (429)", tokens_used=0)
 
         self._availability_cached = False
         self._availability_checked_at = time.monotonic()

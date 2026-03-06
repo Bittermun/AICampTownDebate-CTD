@@ -18,8 +18,9 @@ class TokenDistributor:
     Converts judge confidence scores into token awards.
     """
     
-    def __init__(self, tokens_per_round: float = 20.0):
+    def __init__(self, tokens_per_round: float = 20.0, exponent: float = 2.0):
         self.tokens_per_round = tokens_per_round
+        self.exponent = exponent
     
     def distribute_pot(
         self,
@@ -32,7 +33,7 @@ class TokenDistributor:
         extra_pot_tokens: float = 0.0,
     ) -> DistributionResult:
         """
-        Pari-mutuel Pot Split: Total pot (Base Award + Extra) split exactly by final confidence.
+        Pari-mutuel Pot Split: Total pot (Base Award + Extra) split by exponential confidence.
         """
         for name, value in (
             ("confidence_a", confidence_a),
@@ -55,8 +56,16 @@ class TokenDistributor:
             tokens_a = total_pot / 2
             tokens_b = total_pot / 2
         else:
-            tokens_a = total_pot * (confidence_a / total_conf)
-            tokens_b = total_pot * (confidence_b / total_conf)
+            conf_a_exp = confidence_a ** self.exponent
+            conf_b_exp = confidence_b ** self.exponent
+            total_exp = conf_a_exp + conf_b_exp
+            
+            if total_exp <= 0:
+                tokens_a = total_pot / 2
+                tokens_b = total_pot / 2
+            else:
+                tokens_a = total_pot * (conf_a_exp / total_exp)
+                tokens_b = total_pot * (conf_b_exp / total_exp)
         
         # Invariant check: tokens awarded must equal tokens available (prevents leaks)
         assert abs(tokens_a + tokens_b - total_pot) < 0.01, \

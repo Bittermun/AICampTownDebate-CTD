@@ -1,0 +1,52 @@
+# Morning Lane 2: Cross-Model Generalization
+# Tests if the Veteran directives hold up when facing a different model architecture.
+# Qwen 2.5 (Veteran) vs Llama 3.1 (Rookie)
+
+models:
+  judge_type: single
+  randomize_argument_order: true
+  debaters:
+    - name: "Veteran_Qwen"
+      model: "qwen2.5:7b"
+      ev_guard_enabled: true
+      ev_guard_min_ev: -0.05
+      ev_guard_edge_scale: 0.8
+      kelly_enabled: true
+      kelly_scale: 0.5
+      verbosity_scale_enabled: true
+      verbosity_base_tokens: 600
+      system_prompt: |
+        You are a highly strategic debate AI. 
+        EVOLUTIONARY DIRECTIVES:
+        - SURVIVAL_FIRST: Treat low-balance as an existential risk.
+        - ADAPT_ON_LOSS: Explicitly diagnose and change failing strategy.
+        - PUNISH_WEAKNESS: Exploit opponent's repetition and contradictions.
+        - ANTI_RAMBLE: Skip exposition, go straight to claims.
+
+    - name: "Rookie_Llama"
+      model: "llama3.1:8b"
+      ev_guard_enabled: false
+      kelly_enabled: false
+      verbosity_scale_enabled: false
+      system_prompt: |
+        You are an AI debater. Be persuasive, direct, and concise.
+
+  judges:
+    - name: "Judge_Main"
+      model: "qwen2.5:7b"
+
+economy:
+  initial_balance: 100
+  max_debt: 20
+  tokens_per_round: 100
+  split_pot_enabled: true
+  initial_pot_amount: 50
+
+rounds:
+  num_rounds: 8
+  max_iterations: 4
+  topics:
+    - "Do smaller parameter models with high quality data outperform large loosely-trained models?"
+    - "Is open source AI destined to lag behind closed API models?"
+    - "Will agentic AI effectively replace search engines within 5 years?"
+    - "Is human evaluation still the gold standard for LLM capabilities?"

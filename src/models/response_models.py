@@ -118,3 +118,5 @@ class DeliberationResponse(BaseModel):
     amount: float = Field(ge=0.0, description="Token amount to bet")
     max_budget: float = Field(ge=0.0, le=200.0, default=30.0, description="Maximum tokens authorized for generating the response")
     use_search: bool = Field(default=False, description="Whether to pay for a web search as part of the response")
+    search_query: str | None = Field(default=None, description="Custom search query when use_search is true. Be specific (e.g. 'GDP growth rate 2025' not 'economics').")
+    pass_statement: str | None = Field(default=None, description="Brief statement to the judge when choosing HOLD/PASS. Explain why you are holding.")

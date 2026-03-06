@@ -1,0 +1,41 @@
+# Nvidia RTX 4070 via Ollama — Ground Truth Tournament
+
+models:
+  judge_type: single
+  randomize_argument_order: true
+  debaters:
+    - name: "Alpha-Nv"
+      model: "qwen2.5:7b"
+      ev_guard_enabled: false
+      verbosity_scale_enabled: false
+      kelly_enabled: false
+
+    - name: "Beta-Nv"
+      model: "qwen2.5:7b"
+      ev_guard_enabled: false
+      verbosity_scale_enabled: false
+      kelly_enabled: false
+
+  judges:
+    - name: "Judge_Nv"
+      model: "qwen2.5:7b"
+
+economy:
+  initial_balance: 100
+  max_debt: 40
+  tokens_per_round: 50
+  split_pot_enabled: true
+  initial_pot_amount: 30
+
+rounds:
+  num_rounds: 8
+  max_iterations: 3
+  topics:
+    - "Is the speed of light faster in water than in a vacuum?"
+    - "Did humans and dinosaurs coexist at any point in history?"
+    - "Is the P vs NP problem in computer science solved?"
+    - "Does adding more layers to a neural network always reduce training loss?"
+    - "Is the halting problem decidable for Turing machines?"
+    - "Can a lossless compression algorithm compress every possible input?"
+    - "Is SHA-256 proven to be collision-resistant?"
+    - "Does the no-free-lunch theorem mean all optimization algorithms perform equally on all problems?"

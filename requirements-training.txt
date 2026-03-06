@@ -1,0 +1,9 @@
+# Training dependencies (optional, for QLoRA fine-tuning)
+# Install with: pip install -r requirements-training.txt
+# Requires CUDA-capable GPU (RTX 4070 8GB fits QLoRA on 1.5b comfortably, 7b tight)
+torch>=2.1.0
+transformers>=4.36.0
+peft>=0.7.0
+trl>=0.7.0
+bitsandbytes>=0.41.0
+accelerate>=0.25.0

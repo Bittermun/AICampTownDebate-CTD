@@ -1,6 +1,7 @@
 """
-Round: Single debate round logic with proper re-evaluation after counter-arguments.
-Refactored into discrete phases with explicit state management.
+DEPRECATED: This module is superseded by dynamic_round.py (DynamicDebateRound).
+Not used by any active demo, tournament, or benchmark code path.
+Kept only for backwards compatibility with old verification scripts (verify_pot.py, test_ensemble.py).
 """
 from dataclasses import dataclass, field
 from typing import Optional, TYPE_CHECKING, List

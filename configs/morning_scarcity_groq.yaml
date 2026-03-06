@@ -1,0 +1,56 @@
+# Morning Lane 1: Extreme Scarcity (Groq)
+# Tests the impact of having 10,000 tokens vs 400 tokens on argument quality.
+# Uses Groq's Llama-3.3-70B model with the OpenAI compatibility backend.
+
+models:
+  judge_type: single
+  randomize_argument_order: true
+  debaters:
+    - name: "Veteran_Scarcity"
+      model: "openai:llama-3.3-70b-versatile"
+      ev_guard_enabled: true
+      ev_guard_min_ev: -0.05
+      ev_guard_edge_scale: 0.8
+      kelly_enabled: true
+      kelly_scale: 0.5
+      verbosity_scale_enabled: true
+      verbosity_base_tokens: 400 # Extreme scarcity
+      system_prompt: |
+        You are a highly strategic debate AI. 
+        EVOLUTIONARY DIRECTIVES:
+        - SURVIVAL_FIRST: You have very few tokens. Treat every word as expensive. Skip pleasantries.
+        - ANTI_RAMBLE: No exposition. Provide only core claims and evidence.
+
+    - name: "Veteran_Abundance"
+      model: "openai:llama-3.3-70b-versatile"
+      ev_guard_enabled: true
+      ev_guard_min_ev: -0.05
+      ev_guard_edge_scale: 0.8
+      kelly_enabled: true
+      kelly_scale: 0.5
+      verbosity_scale_enabled: true
+      verbosity_base_tokens: 10000 # Massive abundance
+      system_prompt: |
+        You are a highly strategic debate AI. 
+        EVOLUTIONARY DIRECTIVES:
+        - SURVIVAL_FIRST: You have abundant tokens, but you must still win the argument.
+
+  judges:
+    - name: "Judge_Main"
+      model: "openai:llama-3.3-70b-versatile"
+
+economy:
+  initial_balance: 100
+  max_debt: 20
+  tokens_per_round: 100
+  split_pot_enabled: true
+  initial_pot_amount: 50
+
+rounds:
+  num_rounds: 8
+  max_iterations: 4
+  topics:
+    - "Does token scarcity force higher reasoning density in LLMs?"
+    - "Is zero-shot reasoning fundamentally limited without intermediate scratchpads?"
+    - "Does scaling compute during inference yield better results than scaling during pre-training?"
+    - "Is RLHF causing mode collapse in model creativity?"

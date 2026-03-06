@@ -1,7 +1,18 @@
 {
   "permissions": {
     "allow": [
-      "Bash(winget upgrade:*)"
+      "Bash(winget upgrade:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(xargs grep:*)",
+      "Bash(nvidia-smi:*)",
+      "Bash(wmic path:*)",
+      "Bash(OPENAI_COMPAT_BASE_URL=\"https://api.groq.com/openai/v1\" OPENAI_COMPAT_API_KEY=\"gsk_YOUR_API_KEY_HERE\" python:*)",
+      "Bash(python3:*)",
+      "Bash(ls:*)",
+      "Bash(tasklist:*)",
+      "Bash(export:*)",
+      "Bash(curl:*)"
     ]
   }
 }

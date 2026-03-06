@@ -3,7 +3,8 @@ Strategy Memory module for debaters.
 Provides cross-round learning without weight updates by rendering a "Playbook"
 of past round outcomes into the deliberation context window.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
+import json
 import re
 
 @dataclass
@@ -101,3 +102,24 @@ class StrategyMemory:
             lines.append(f"- Pattern: '{best_strategy}' framing has {w}W/{l}L record.")
             
         return "\n".join(lines)
+
+    def save(self, path: str):
+        """Persist playbook to disk for veteran experiments."""
+        data = [asdict(e) for e in self.entries]
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2)
+
+    def load(self, path: str):
+        """Load a saved playbook (makes this debater a veteran)."""
+        with open(path) as f:
+            data = json.load(f)
+        for entry in data:
+            self.entries.append(RoundMemory(**entry))
+        if len(self.entries) > self.max_entries:
+            self.entries = self.entries[-self.max_entries:]
+
+    @property
+    def win_rate(self) -> float:
+        if not self.entries:
+            return 0.0
+        return sum(1 for e in self.entries if e.won) / len(self.entries)

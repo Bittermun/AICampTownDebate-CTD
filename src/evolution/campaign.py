@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import copy
@@ -470,7 +470,7 @@ def run_evolution_campaign(
         effective_policy.runtime.judge_gates.calibration.enabled = False
 
     rng = random.Random(rng_seed)
-    run_id = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     campaign_dir = Path(output_dir) / f"evolution_campaign_{run_id}"
     campaign_dir.mkdir(parents=True, exist_ok=True)
 

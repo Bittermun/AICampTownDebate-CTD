@@ -1,7 +1,7 @@
 """Champion registry and ELO/tier update logic."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from statistics import mean
 from typing import Dict, List, Tuple
@@ -96,7 +96,7 @@ def update_registry_if_eligible(
     entry["judge_name"] = judge_name
 
     window = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "run_id": metadata.get("run_id"),
         "performer_id": entry.get("performer_id"),
         "parent_performer_id": entry.get("parent_performer_id"),
@@ -113,7 +113,7 @@ def update_registry_if_eligible(
 
     registry.setdefault("history", []).append(
         {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "model": model_name,
             "performer_id": entry.get("performer_id"),
             "parent_performer_id": entry.get("parent_performer_id"),
@@ -146,7 +146,7 @@ def _maybe_freeze(entry: Dict, policy: BenchmarkPolicy, metadata: Dict, notes: L
 
     entry["frozen"] = True
     manifest = {
-        "frozen_at": datetime.utcnow().isoformat() + "Z",
+        "frozen_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "mean_recent_aggregate": round(float(mean([float(w["aggregate_score"]) for w in recent])), 6),
         "model_identifier": metadata.get("model_identifier", metadata.get("model_name", "unknown")),
         "model_version_or_hash": metadata.get("model_version_or_hash", _stable_hash(metadata)),

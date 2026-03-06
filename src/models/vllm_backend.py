@@ -72,6 +72,10 @@ class VLLMBackend:
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
+        
+        if "groq.com" in self.config.base_url.lower() and max_tokens < 1024:
+            max_tokens = 2048
+            
         payload = {
             "model": self.config.model,
             "messages": messages,
@@ -80,7 +84,9 @@ class VLLMBackend:
             "stream": False,
         }
         if json_mode:
-            payload["response_format"] = {"type": "json_object"}
+            # Groq's qwen models frequently fail their own backend validation when json_object is forced.
+            if "groq.com" not in self.config.base_url.lower():
+                payload["response_format"] = {"type": "json_object"}
         return payload
     
     def _build_completions_payload(

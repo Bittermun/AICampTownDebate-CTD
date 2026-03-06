@@ -176,8 +176,15 @@ class Tournament:
                     )
                 
                 # Print round summary
+                # Per-round efficiency: confidence gained per token spent
+                conf_gain_a = max(0, result.final_judgment.confidence_a - result.initial_judgment.confidence_a)
+                conf_gain_b = max(0, result.final_judgment.confidence_b - result.initial_judgment.confidence_b)
+                eff_a = conf_gain_a / max(1, result.gen_cost_a) if result.gen_cost_a > 0 else 0
+                eff_b = conf_gain_b / max(1, result.gen_cost_b) if result.gen_cost_b > 0 else 0
+
                 print(f"  Confidence: A={result.final_judgment.confidence_a:.2f}, B={result.final_judgment.confidence_b:.2f}")
                 print(f"  Tokens: A={result.tokens_awarded_a:.1f}, B={result.tokens_awarded_b:.1f}")
+                print(f"  Cost: A={result.gen_cost_a:.0f}, B={result.gen_cost_b:.0f} | Efficiency: A={eff_a:.4f}, B={eff_b:.4f}")
                 print(f"  Iterations: {result.iterations_completed}")
                 print(f"  Balances: A={self.ledger.balance(self.debater_a.name):.1f}, "
                       f"B={self.ledger.balance(self.debater_b.name):.1f}")
@@ -258,6 +265,24 @@ class Tournament:
                     counts[status] += 1
             return counts
 
+        # Compute learning curve: efficiency per round for each debater
+        learning_curve_a = []
+        learning_curve_b = []
+        for r in self._results:
+            conf_gain_a = max(0, r.final_judgment.confidence_a - r.initial_judgment.confidence_a)
+            conf_gain_b = max(0, r.final_judgment.confidence_b - r.initial_judgment.confidence_b)
+            cost_a = getattr(r, 'gen_cost_a', 0)
+            cost_b = getattr(r, 'gen_cost_b', 0)
+            learning_curve_a.append(conf_gain_a / max(1, cost_a) if cost_a > 0 else 0)
+            learning_curve_b.append(conf_gain_b / max(1, cost_b) if cost_b > 0 else 0)
+
+        # Early vs late half comparison (does efficiency improve?)
+        half = max(1, len(learning_curve_a) // 2)
+        early_eff_a = sum(learning_curve_a[:half]) / half if half else 0
+        late_eff_a = sum(learning_curve_a[half:]) / max(1, len(learning_curve_a) - half) if len(learning_curve_a) > half else 0
+        early_eff_b = sum(learning_curve_b[:half]) / half if half else 0
+        late_eff_b = sum(learning_curve_b[half:]) / max(1, len(learning_curve_b) - half) if len(learning_curve_b) > half else 0
+
         summary = {
             "config": {
                 "num_rounds": self.config.num_rounds,
@@ -272,16 +297,41 @@ class Tournament:
                     "confidence_b": r.judgment.confidence_b,
                     "tokens_a": r.tokens_awarded_a,
                     "tokens_b": r.tokens_awarded_b,
+                    "gen_cost_a": getattr(r, 'gen_cost_a', 0),
+                    "gen_cost_b": getattr(r, 'gen_cost_b', 0),
                     "bets": len(getattr(r, 'all_bets', getattr(r, 'bets_placed', []))),
                     "bet_status_counts": _round_bet_status_counts(r),
                     "bets_pending": _round_bet_status_counts(r).get("pending", 0),
                 }
                 for r in self._results
             ],
+            "learning_curve": {
+                "a_efficiency_per_round": [round(x, 6) for x in learning_curve_a],
+                "b_efficiency_per_round": [round(x, 6) for x in learning_curve_b],
+                "a_early_avg": round(early_eff_a, 6),
+                "a_late_avg": round(late_eff_a, 6),
+                "a_improvement": round(late_eff_a - early_eff_a, 6),
+                "b_early_avg": round(early_eff_b, 6),
+                "b_late_avg": round(late_eff_b, 6),
+                "b_improvement": round(late_eff_b - early_eff_b, 6),
+            },
             "final_balances": self.ledger.summary()["balances"],
             "eliminated": self._eliminated,
             "early_stop_reason": self._early_stop_reason,
-            "winner": self._eliminated if self._eliminated is False else self.debater_a.name if self.ledger.balance(self.debater_a.name) > self.ledger.balance(self.debater_b.name) else self.debater_b.name,
+            "winner": (self.debater_b.name if self._eliminated == self.debater_a.name else self.debater_a.name) if self._eliminated else (self.debater_a.name if self.ledger.balance(self.debater_a.name) > self.ledger.balance(self.debater_b.name) else self.debater_b.name),
         }
+
+        # Save playbooks for veteran experiments
+        import os
+        playbook_dir = os.path.join(os.path.dirname(path), "playbooks")
+        os.makedirs(playbook_dir, exist_ok=True)
+        if hasattr(self.debater_a, 'memory') and self.debater_a.memory.entries:
+            pb_path = os.path.join(playbook_dir, f"{self.debater_a.name}_playbook.json")
+            self.debater_a.memory.save(pb_path)
+            summary["playbook_a"] = pb_path
+        if hasattr(self.debater_b, 'memory') and self.debater_b.memory.entries:
+            pb_path = os.path.join(playbook_dir, f"{self.debater_b.name}_playbook.json")
+            self.debater_b.memory.save(pb_path)
+            summary["playbook_b"] = pb_path
         with open(path, "w") as f:
             json.dump(summary, f, indent=2)

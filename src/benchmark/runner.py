@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from statistics import mean, pstdev
 from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -786,7 +786,7 @@ def run_phase1(
     artifact_root_path = artifact_root or "logs"
     if source_mode not in ("default", "core_live_stretch_fixture", "all_live", "all_fixture"):
         raise ValueError(f"Unsupported source_mode: {source_mode}")
-    run_id = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     performer_id = _hash_dict({"model": model_name, "judge": judge_model_configured})
     policy_hash = _hash_dict(asdict(policy))
     tournament_config_hash = _hash_dict(asdict(tc))

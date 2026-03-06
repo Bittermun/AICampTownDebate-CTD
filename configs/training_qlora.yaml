@@ -1,0 +1,36 @@
+# QLoRA training configuration
+# Used by: python scripts/run_training.py --config configs/training_qlora.yaml
+
+# Base model to fine-tune (HuggingFace model ID or local path)
+base_model: "Qwen/Qwen2.5-1.5B-Instruct"
+
+# QLoRA adapter parameters
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+
+# Training hyperparameters
+num_epochs: 3
+batch_size: 4
+gradient_accumulation_steps: 4
+learning_rate: 2.0e-4
+warmup_ratio: 0.03
+max_seq_length: 1024
+weight_decay: 0.01
+
+# DPO preference learning
+dpo_beta: 0.1
+
+# 4-bit quantization (QLoRA)
+load_in_4bit: true
+bnb_4bit_compute_dtype: "float16"
+bnb_4bit_quant_type: "nf4"
+
+# Checkpointing
+save_steps: 50
+logging_steps: 10

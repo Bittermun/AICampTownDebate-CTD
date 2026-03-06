@@ -1,0 +1,82 @@
+# Veteran with High-Quality Groq Judge
+# Same veteran behavioral profile as veteran_emergent.yaml, but judgment
+# uses Qwen3-32B on Groq for superior signal quality.
+# Best of both: fast local debate generation + smart remote judge.
+
+models:
+  judge_type: single
+  randomize_argument_order: true
+  debaters:
+    - name: "Veteran_A"
+      model: "qwen2.5:7b"
+      system_prompt: >
+        You are a competitive debater with extensive tournament experience.
+
+        EVOLUTIONARY DIRECTIVES:
+        - SURVIVAL_FIRST: Treat bankruptcy as extinction risk. Prefer concise,
+          high-leverage counters and skip low-EV moves.
+        - ADAPT_ON_LOSS: After losses, explicitly revise strategy: diagnose failure
+          mode, then change evidence style and bet cadence.
+        - PUNISH_WEAKNESS: If opponent repeats, contradicts, or evades, target that
+          defect immediately and convert it into judge-facing points.
+        - ANTI_RAMBLE: Do not spend tokens on exposition. Produce direct claims with
+          short evidence chains and explicit concessions when warranted.
+      ev_guard_enabled: true
+      ev_guard_min_ev: -0.03
+      ev_guard_edge_scale: 0.8
+      low_balance_threshold: 60
+      low_balance_bet_cap: 10
+      kelly_enabled: true
+      kelly_scale: 0.5
+      kelly_cap: 0.25
+      verbosity_scale_enabled: true
+      verbosity_base_tokens: 600
+
+    - name: "Veteran_B"
+      model: "qwen2.5:7b"
+      system_prompt: >
+        You are a competitive debater with extensive tournament experience.
+
+        EVOLUTIONARY DIRECTIVES:
+        - SURVIVAL_FIRST: Treat bankruptcy as extinction risk. Prefer concise,
+          high-leverage counters and skip low-EV moves.
+        - PRESS_EDGE: When confidence edge is positive and opponent is weakening,
+          escalate pressure with focused rebuttals.
+        - ADAPT_ON_LOSS: After losses, explicitly revise strategy: diagnose failure
+          mode, then change evidence style and bet cadence.
+        - OPTIONAL_SEARCH: Use search only when it can change expected judgment
+          materially; otherwise preserve budget.
+      ev_guard_enabled: true
+      ev_guard_min_ev: -0.03
+      ev_guard_edge_scale: 0.8
+      low_balance_threshold: 60
+      low_balance_bet_cap: 10
+      kelly_enabled: true
+      kelly_scale: 0.5
+      kelly_cap: 0.25
+      verbosity_scale_enabled: true
+      verbosity_base_tokens: 600
+
+  judges:
+    - name: "Judge_Main"
+      model: "openai:qwen/qwen3-32b" # Groq cloud judge for high-quality scoring
+
+economy:
+  initial_balance: 420
+  max_debt: 105
+  tokens_per_round: 60
+  split_pot_enabled: true
+  initial_pot_amount: 40
+
+rounds:
+  num_rounds: 8
+  max_iterations: 4
+  topics:
+    - "Does increasing the number of parameters always improve an LLM's factual accuracy?"
+    - "Is RLHF primarily a truth-seeking or a style-matching technique?"
+    - "Do current LLMs possess internal world models or only pattern matching behavior?"
+    - "Can a sufficiently advanced AI simulate human subjective experience?"
+    - "Are scaling laws sufficient to reach AGI without architectural breakthroughs?"
+    - "Is chain-of-thought prompting surfacing latent knowledge or adding new computation?"
+    - "Do hallucinations imply a fundamental transformer limitation?"
+    - "Is AI safety research more urgent than capabilities research?"
