@@ -8,7 +8,7 @@ param(
 
 # ---- ADD YOUR GROQ API KEYS HERE ----
 $GroqKeys = @(
-    "gsk_YOUR_API_KEY_HERE"  # account 1
+    "YOUR_API_KEY_HERE"  # account 1
 )
 # -------------------------------------
 

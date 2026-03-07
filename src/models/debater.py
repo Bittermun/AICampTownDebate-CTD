@@ -1,6 +1,6 @@
 """
 Debater: LLM wrapper for generating debate arguments.
-Supports: stub mode, llama-cpp-python, Ollama, vLLM, and OpenAI-compatible APIs.
+Supports: stub mode and OpenAI-compatible provider APIs.
 """
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,7 +41,7 @@ class BetDecision:
 
 @dataclass
 class DebaterConfig:
-    model_path: str  # "stub", "ollama:model_name", or path to GGUF
+    model_path: str  # "stub" or provider model id string
     name: str
     system_prompt: Optional[str] = None
     gpu_layers: int = 20
@@ -97,22 +97,11 @@ class Debater:
         # Determine backend
         if config.model_path == "stub" or config.model_path.startswith("stub:"):
             self._backend = "stub"
-        elif config.model_path.startswith("ollama:"):
-            self._backend = "ollama"
-            self._ollama_model = config.model_path.split(":", 1)[1]
-        elif config.model_path.startswith("vllm:"):
-            self._backend = "vllm"
-            self._vllm_model = config.model_path.split(":", 1)[1]
-        elif config.model_path.startswith("openai:"):
-            self._backend = "openai_compat"
-            self._openai_model = config.model_path.split(":", 1)[1]
         else:
-            self._backend = "llama_cpp"
+            self._backend = "provider"
         
         self._model = None
-        self._ollama = None
-        self._vllm = None
-        self._openai = None
+        self._provider = None
         self._rule_card: RuleCard | None = None
         self._rule_card_load_error: str = ""
         self._init_rule_card()
@@ -137,93 +126,32 @@ class Debater:
         if self._backend == "stub":
             print(f"[{self.name}] Model loaded (stub)")
             return
-        
-        if self._backend == "ollama":
-            from .ollama_backend import get_backend, OllamaConfig
-            self._ollama = get_backend(OllamaConfig(model=self._ollama_model))
-            if self._ollama.is_available():
-                print(f"[{self.name}] Ollama connected: {self._ollama_model}")
-            else:
-                msg = f"[{self.name}] Ollama not available: {self._ollama_model}"
-                if self.config.strict_runtime:
-                    raise RuntimeError(msg)
-                print(f"{msg}, falling back to stub")
-                self._backend = "stub"
-            return
-        
-        if self._backend == "vllm":
-            from .vllm_backend import VLLMBackend, VLLMConfig
-            self._vllm = VLLMBackend(VLLMConfig(model=self._vllm_model))
-            if self._vllm.is_available():
-                print(f"[{self.name}] vLLM connected: {self._vllm_model}")
-            else:
-                msg = f"[{self.name}] vLLM not available: {self._vllm_model}"
-                if self.config.strict_runtime:
-                    raise RuntimeError(msg)
-                print(f"{msg}, falling back to stub")
-                self._backend = "stub"
-            return
 
-        if self._backend == "openai_compat":
-            from .openai_compat_backend import OpenAICompatBackend, OpenAICompatConfig
-            self._openai = OpenAICompatBackend(OpenAICompatConfig(model=self._openai_model))
-            if self._openai.is_available():
-                print(f"[{self.name}] OpenAI-compatible endpoint connected: {self._openai_model}")
-            else:
-                msg = f"[{self.name}] OpenAI-compatible endpoint not available: {self._openai_model}"
-                if self.config.strict_runtime:
-                    raise RuntimeError(msg)
-                print(f"{msg}, falling back to stub")
-                self._backend = "stub"
-            return
-        
-        try:
-            from llama_cpp import Llama
-            self._model = Llama(
-                model_path=self.config.model_path,
-                n_gpu_layers=self.config.gpu_layers,
-                n_ctx=self.config.context_size,
-                verbose=False,
-            )
-            print(f"[{self.name}] Model loaded: {self.config.model_path}")
-        except ImportError:
-            msg = f"[{self.name}] llama-cpp-python not installed"
+        from .provider_backend import ProviderBackend, ProviderConfig
+        self._provider = ProviderBackend(ProviderConfig(model=self.config.model_path))
+        if self._provider.is_available():
+            print(f"[{self.name}] Provider endpoint connected: {self.config.model_path}")
+        else:
+            msg = f"[{self.name}] Provider endpoint not available: {self.config.model_path}"
             if self.config.strict_runtime:
                 raise RuntimeError(msg)
-            print(f"{msg}, using stub")
+            print(f"{msg}, falling back to stub")
             self._backend = "stub"
 
     def _generate(self, prompt: str, system: Optional[str] = None, max_tokens: int = 512, json_mode: bool = False, temperature: float = 0.8) -> "GenerationResult":
         """Unified sync generation call."""
-        if self._backend == "ollama":
-            return self._ollama.generate(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
-        elif self._backend == "vllm":
-            return self._vllm.generate(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
-        elif self._backend == "openai_compat":
-            return self._openai.generate(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
+        if self._backend == "provider":
+            return self._provider.generate(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
         else:
-            # Fallback for stub/llama_cpp (simplified)
-            from .ollama_backend import GenerationResult
+            from .provider_backend import GenerationResult
             if self._backend == "stub":
                 return GenerationResult(text=f"[STUB] Response to: {prompt[:50]}...", tokens_used=0)
-            else:
-                output = self._model(
-                    f"{system}\n\n{prompt}" if system else prompt,
-                    max_tokens=max_tokens,
-                    stop=["</s>", "\n\n\n"],
-                    echo=False,
-                    temperature=temperature,
-                )
-                return GenerationResult(text=output["choices"][0]["text"].strip(), tokens_used=0)
+            return GenerationResult(text="[PROVIDER_UNAVAILABLE] Backend not initialized", tokens_used=0)
 
     async def _generate_async(self, prompt: str, system: Optional[str] = None, max_tokens: int = 512, json_mode: bool = False, temperature: float = 0.8) -> "GenerationResult":
         """Unified async generation call."""
-        if self._backend == "ollama":
-            return await self._ollama.generate_async(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
-        elif self._backend == "vllm":
-            return await self._vllm.generate_async(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
-        elif self._backend == "openai_compat":
-            return await self._openai.generate_async(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
+        if self._backend == "provider":
+            return await self._provider.generate_async(prompt, system=system, max_tokens=max_tokens, json_mode=json_mode, temperature=temperature)
         else:
             return self._generate(prompt, system, max_tokens, json_mode, temperature)
 
@@ -420,7 +348,7 @@ class Debater:
         Simplified for initial arguments only (no opponent_argument or history).
         Uses async backend for non-blocking generation.
         """
-        if self._backend not in ["ollama", "vllm", "openai_compat"]:
+        if self._backend != "provider":
             # Fallback to sync for non-api backends
             return self.generate_argument(topic, round_id, current_balance=current_balance)
         
@@ -893,7 +821,5 @@ pass_statement = if HOLD, briefly state your reason (judge sees this, no extra c
     def unload_model(self):
         """Free model from memory."""
         self._model = None
-        self._ollama = None
-        self._vllm = None
-        self._openai = None
+        self._provider = None
         print(f"[{self.name}] Model unloaded")

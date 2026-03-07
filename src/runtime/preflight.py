@@ -1,11 +1,8 @@
 ﻿"""Runtime preflight checks for experiment validity."""
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Iterable, List
 
-from ..models.ollama_backend import get_backend, OllamaConfig
-from ..models.openai_compat_backend import OpenAICompatBackend, OpenAICompatConfig
-from ..models.vllm_backend import VLLMBackend, VLLMConfig
+from ..models.provider_backend import ProviderBackend, ProviderConfig
 
 
 @dataclass
@@ -19,66 +16,30 @@ class ModelCheckResult:
 
 
 def normalize_model_path(model: str) -> str:
-    """Normalize model path while preserving explicit backend prefixes."""
+    """Normalize model path for provider backend."""
     if model == "stub":
         return "stub"
     if ":" in model:
-        prefix = model.split(":", 1)[0]
-        if prefix in {"ollama", "vllm", "openai", "stub"}:
-            return model
-    return f"ollama:{model}"
+        prefix, rest = model.split(":", 1)
+        if prefix in {"ollama", "vllm", "openai"} and rest:
+            return rest
+    return model
 
 
 def backend_from_model_path(model_path: str) -> str:
-    if model_path.startswith("ollama:"):
-        return "ollama"
-    if model_path.startswith("vllm:"):
-        return "vllm"
-    if model_path.startswith("openai:"):
-        return "openai_compat"
     if model_path == "stub" or model_path.startswith("stub:"):
         return "stub"
-    return "llama_cpp"
+    return "provider"
 
 
-def _check_ollama(model_path: str) -> tuple[bool, str]:
-    model_name = model_path.split(":", 1)[1]
-    backend = get_backend(OllamaConfig(model=model_name))
+def _check_provider(model_path: str) -> tuple[bool, str]:
+    backend = ProviderBackend(ProviderConfig(model=model_path))
     if not backend.is_available():
-        return False, "Ollama server unavailable"
-    models = backend.list_models()
-    if models and model_name not in models:
-        return False, f"Ollama model '{model_name}' not found (run: ollama pull {model_name})"
-    return True, "Ollama model available"
-
-
-def _check_vllm(model_path: str) -> tuple[bool, str]:
-    model_name = model_path.split(":", 1)[1]
-    backend = VLLMBackend(VLLMConfig(model=model_name))
-    if not backend.is_available():
-        return False, "vLLM server unavailable"
+        return False, "Provider endpoint unavailable"
     available_models = backend.list_models()
-    if available_models and model_name not in available_models:
-        return False, f"vLLM model '{model_name}' not exposed by /v1/models"
-    return True, "vLLM server available"
-
-
-def _check_llama_cpp(model_path: str) -> tuple[bool, str]:
-    path = Path(model_path)
-    if not path.exists():
-        return False, f"llama.cpp model path not found: {model_path}"
-    return True, "llama.cpp model path exists"
-
-
-def _check_openai_compat(model_path: str) -> tuple[bool, str]:
-    model_name = model_path.split(":", 1)[1]
-    backend = OpenAICompatBackend(OpenAICompatConfig(model=model_name))
-    if not backend.is_available():
-        return False, "OpenAI-compatible endpoint unavailable"
-    available_models = backend.list_models()
-    if available_models and model_name not in available_models:
-        return False, f"OpenAI-compatible model '{model_name}' not exposed by /v1/models"
-    return True, "OpenAI-compatible endpoint available"
+    if available_models and model_path not in available_models:
+        return False, f"Provider model '{model_path}' not exposed by /v1/models"
+    return True, "Provider endpoint available"
 
 
 def check_model(label: str, configured_model: str) -> ModelCheckResult:
@@ -87,17 +48,8 @@ def check_model(label: str, configured_model: str) -> ModelCheckResult:
 
     if backend == "stub":
         return ModelCheckResult(label, configured_model, resolved, backend, True, "Explicit stub model")
-    if backend == "ollama":
-        ok, detail = _check_ollama(resolved)
-        return ModelCheckResult(label, configured_model, resolved, backend, ok, detail)
-    if backend == "vllm":
-        ok, detail = _check_vllm(resolved)
-        return ModelCheckResult(label, configured_model, resolved, backend, ok, detail)
-    if backend == "openai_compat":
-        ok, detail = _check_openai_compat(resolved)
-        return ModelCheckResult(label, configured_model, resolved, backend, ok, detail)
 
-    ok, detail = _check_llama_cpp(resolved)
+    ok, detail = _check_provider(resolved)
     return ModelCheckResult(label, configured_model, resolved, backend, ok, detail)
 
 

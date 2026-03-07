@@ -1,0 +1,73 @@
+{
+  "run_id": "20260306_170026_multiagent_master",
+  "created_at": "2026-03-06T17:00:26.859388",
+  "queue_file": "CODEX_QUEUE.md",
+  "tasks": [
+    {
+      "task_id": "001",
+      "status": "ready",
+      "batch": "A",
+      "title": "Create Postgres schema (SQLite-compatible for local test)"
+    },
+    {
+      "task_id": "002",
+      "status": "blocked \u2014 needs TASK-001",
+      "batch": "B",
+      "title": "DB connection module"
+    },
+    {
+      "task_id": "003",
+      "status": "blocked \u2014 needs TASK-001",
+      "batch": "B",
+      "title": "Core CRUD ops layer"
+    },
+    {
+      "task_id": "005",
+      "status": "blocked \u2014 needs TASK-001",
+      "batch": "B",
+      "title": "Patch registration script"
+    },
+    {
+      "task_id": "006",
+      "status": "blocked \u2014 needs TASK-001",
+      "batch": "B",
+      "title": "Agent registry module"
+    },
+    {
+      "task_id": "007",
+      "status": "blocked \u2014 needs BATCH B",
+      "batch": "C",
+      "title": "Provider health check"
+    },
+    {
+      "task_id": "008",
+      "status": "blocked \u2014 needs BATCH B",
+      "batch": "C",
+      "title": "Tournament round DB writer"
+    },
+    {
+      "task_id": "009",
+      "status": "blocked \u2014 needs BATCH B",
+      "batch": "C",
+      "title": "Tournament resume loader"
+    },
+    {
+      "task_id": "010",
+      "status": "blocked \u2014 needs BATCH B",
+      "batch": "C",
+      "title": "Leaderboard queries"
+    },
+    {
+      "task_id": "011",
+      "status": "blocked \u2014 needs BATCH C",
+      "batch": "D",
+      "title": "Config \u2192 provider_config bridge"
+    },
+    {
+      "task_id": "012",
+      "status": "blocked \u2014 needs BATCH C",
+      "batch": "D",
+      "title": "Migrate existing clean_100 JSON logs into DB"
+    }
+  ]
+}

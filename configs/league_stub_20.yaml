@@ -1,0 +1,33 @@
+﻿models:
+  judge_type: single
+  randomize_argument_order: true
+  debaters:
+    - name: "Alpha"
+      model: "stub"
+      ev_guard_enabled: false
+      verbosity_scale_enabled: false
+      kelly_enabled: false
+    - name: "Beta"
+      model: "stub"
+      ev_guard_enabled: false
+      verbosity_scale_enabled: false
+      kelly_enabled: false
+  judges:
+    - name: "Judge_Stub"
+      model: "stub"
+
+economy:
+  initial_balance: 300
+  max_debt: 60
+  tokens_per_round: 80
+  split_pot_enabled: true
+  initial_pot_amount: 40
+
+rounds:
+  num_rounds: 20
+  max_iterations: 3
+  topics:
+    - "Is testability more important than velocity in early systems?"
+    - "Should autonomous agents default to strict verification gates?"
+    - "Does economic pressure improve strategic reasoning in LLMs?"
+    - "Is resume-first architecture worth added complexity?"

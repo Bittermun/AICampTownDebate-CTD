@@ -15,6 +15,7 @@ from ..tools import get_research_tool
 
 if TYPE_CHECKING:
     from ..logs import RoundTranscript
+    from ..db.round_writer import RoundWriter
 
 @dataclass
 class DynamicRoundContext:
@@ -152,6 +153,7 @@ class DynamicDebateRound:
         initial_pot_amount: float = 40.0,  # Amount to distribute as initial bounty
         injection_mode: Optional[str] = None,
         injected_draft: Optional[str] = None,
+        round_writer: Optional["RoundWriter"] = None,
     ):
         self.debater_a = debater_a
         self.debater_b = debater_b
@@ -165,6 +167,7 @@ class DynamicDebateRound:
         self.initial_pot_amount = initial_pot_amount
         self.injection_mode = injection_mode
         self.injected_draft = injected_draft
+        self.round_writer = round_writer
 
     
     def run(
@@ -175,6 +178,26 @@ class DynamicDebateRound:
         token_cost_ratio: int = 20,
     ) -> DynamicRoundResult:
         """Execute a dynamic debate round."""
+        idempotency_key = None
+        if self.round_writer:
+            idempotency_key = self.round_writer.begin_round(round_id, agent_id=None)
+
+        try:
+            return self._run_inner(topic, round_id, transcript, token_cost_ratio, idempotency_key)
+        except Exception as exc:
+            if self.round_writer and idempotency_key:
+                self.round_writer.fail_round(idempotency_key, str(exc))
+            raise
+
+    def _run_inner(
+        self,
+        topic: str,
+        round_id: int,
+        transcript: Optional["RoundTranscript"],
+        token_cost_ratio: int,
+        idempotency_key: Optional[str],
+    ) -> DynamicRoundResult:
+        """Internal round execution body for optional DB write wrapping."""
         ctx = DynamicRoundContext(
             round_id=round_id,
             topic=topic,
@@ -271,7 +294,16 @@ class DynamicDebateRound:
             except Exception as e:
                 print(f"  [Warning] Observer {observer.name} failed: {e}")
         
-        return self._build_result(ctx, observation_reports)
+        result = self._build_result(ctx, observation_reports)
+        if self.round_writer and idempotency_key:
+            judge_scores = {
+                "confidence_a": result.final_judgment.confidence_a,
+                "confidence_b": result.final_judgment.confidence_b,
+            }
+            tokens_used = int(result.gen_cost_a + result.gen_cost_b)
+            roi = float(result.tokens_awarded_a + result.tokens_awarded_b)
+            self.round_writer.complete_round(idempotency_key, {}, tokens_used, judge_scores, roi)
+        return result
 
     def _supports_parallel_opening_generation(self) -> bool:
         supported = {"ollama", "vllm", "openai_compat"}
